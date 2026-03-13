@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ client.nom_comercial }} - Detall del Client{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'clients_list' %}">Clients</a></li>
+                <li class="breadcrumb-item active">{{ client.codi_client }}</li>
+            </ol>
+        </nav>
+
+        <!-- HEADER -->
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <h2 class="fw-bold mb-1">{{ client.nom_comercial }}</h2>
+                <p class="text-muted mb-0">
+                    <span class="badge bg-light text-dark">{{ client.codi_client }}</span>
+                    {% if client.actiu %}
+                    <span class="badge bg-success ms-2">Actiu</span>
+                    {% else %}
+                    <span class="badge bg-danger ms-2">Inactiu</span>
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                <a href="{% url 'client_edit' client.id %}" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-pencil-square me-1"></i> Editar
+                </a>
+                {% if user.is_authenticated %}
+                <a href="{% url 'albara_create' %}" class="btn btn-success">
+                    <i class="bi bi-file-earmark-plus me-1"></i> Nou Albarà
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- INFO DEL CLIENT -->
+        <div class="row g-4 mb-5">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase small mb-3">
+                            <i class="bi bi-building me-1"></i> Dades Empresa
+                        </h6>
+                        <p class="mb-1"><strong>CIF:</strong> {{ client.cif }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase small mb-3">
+                            <i class="bi bi-person me-1"></i> Contacte
+                        </h6>
+                        <p class="mb-1"><strong>{{ client.persona_contacte }}</strong></p>
+                        <p class="mb-1"><i class="bi bi-telephone me-1 text-muted"></i> {{ client.telefon }}</p>
+                        <p class="mb-0"><i class="bi bi-envelope me-1 text-muted"></i> <a href="mailto:{{ client.email }}" class="text-decoration-none">{{ client.email }}</a></p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase small mb-3">
+                            <i class="bi bi-geo-alt me-1"></i> Adreça d'Entrega
+                        </h6>
+                        <p class="mb-1">{{ client.adreca_entrega }}</p>
+                        <p class="mb-0">{{ client.poblacio }} ({{ client.codi_postal }})</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ALBARANS ASSOCIATS -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 fw-bold">
+                    <i class="bi bi-file-earmark-text me-2"></i>Últims Albarans
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light text-uppercase small text-muted">
+                            <tr>
+                                <th>Número</th>
+                                <th>Data</th>
+                                <th>Estat</th>
+                                <th class="text-end">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for albara in albarans %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'albara_detail' albara.id %}" class="fw-medium text-decoration-none text-primary">
+                                        #{{ albara.numero_albara }}
+                                    </a>
+                                </td>
+                                <td class="text-muted">{{ albara.data_creacio|date:"d/m/Y H:i" }}</td>
+                                <td>
+                                    {% if albara.estat == 'PENDENT' %}
+                                        <span class="badge rounded-pill bg-warning text-dark">Pendent</span>
+                                    {% elif albara.estat == 'EN_PREPARACIO' %}
+                                        <span class="badge rounded-pill bg-info text-dark">En Preparació</span>
+                                    {% elif albara.estat == 'PREPARAT' %}
+                                        <span class="badge rounded-pill bg-primary">Preparat</span>
+                                    {% elif albara.estat == 'ENVIAT' %}
+                                        <span class="badge rounded-pill bg-secondary">Enviat</span>
+                                    {% elif albara.estat == 'ENTREGAT' %}
+                                        <span class="badge rounded-pill bg-success">Entregat</span>
+                                    {% elif albara.estat == 'CANCELAT' %}
+                                        <span class="badge rounded-pill bg-danger">Cancel·lat</span>
+                                    {% else %}
+                                        <span class="badge rounded-pill bg-secondary">{{ albara.get_estat_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end fw-medium">{{ albara.total|floatformat:2 }} €</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox me-2"></i>Aquest client no té albarans.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</section>
+{% endblock %}

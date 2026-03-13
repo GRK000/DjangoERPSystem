@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% block title %}Resultat de Consulta{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+
+                {% if error %}
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-5 text-center">
+                        <div class="rounded-circle bg-danger bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
+                            <i class="bi bi-x-lg text-danger" style="font-size: 2rem;"></i>
+                        </div>
+                        <h4 class="fw-bold">Albarà no trobat</h4>
+                        <p class="text-muted mb-4">No hem trobat cap albarà amb aquest número. Verifica que l'has escrit correctament.</p>
+                        <a href="{% url 'consulta_form' %}" class="btn btn-primary">
+                            <i class="bi bi-arrow-left me-1"></i>Tornar a cercar
+                        </a>
+                    </div>
+                </div>
+
+                {% elif albara %}
+
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0 fw-bold">
+                                <i class="bi bi-file-earmark-text me-2 text-primary"></i>
+                                Albarà #{{ albara.numero_albara }}
+                            </h4>
+                            {% if albara.estat == 'PENDENT' %}
+                                <span class="badge bg-warning text-dark fs-6">⏳ Pendent</span>
+                            {% elif albara.estat == 'EN_PREPARACIO' %}
+                                <span class="badge bg-info text-dark fs-6">📦 En Preparació</span>
+                            {% elif albara.estat == 'PREPARAT' %}
+                                <span class="badge bg-primary fs-6">✓ Preparat</span>
+                            {% elif albara.estat == 'ENVIAT' %}
+                                <span class="badge bg-secondary fs-6">🚚 Enviat</span>
+                            {% elif albara.estat == 'ENTREGAT' %}
+                                <span class="badge bg-success fs-6">✅ Entregat</span>
+                            {% elif albara.estat == 'CANCELAT' %}
+                                <span class="badge bg-danger fs-6">❌ Cancel·lat</span>
+                            {% else %}
+                                <span class="badge bg-secondary fs-6">{{ albara.get_estat_display }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="text-muted small text-uppercase">Data de creació</div>
+                                <div class="fw-medium">{{ albara.data_creacio|date:"d/m/Y H:i" }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-muted small text-uppercase">Data d'entrega prevista</div>
+                                <div class="fw-medium">{{ albara.data_entrega_prevista|date:"d/m/Y" }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-muted small text-uppercase">Total</div>
+                                <div class="fw-bold fs-4 text-primary">{{ albara.total|floatformat:2 }} €</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if mostrar_detall %}
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0 fw-bold"><i class="bi bi-building me-2"></i>Dades del Client</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-1"><strong>{{ albara.client.nom_comercial }}</strong></p>
+                        <p class="text-muted mb-0">{{ albara.client.codi_client }} | {{ albara.client.email }}</p>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0 fw-bold"><i class="bi bi-list-ul me-2"></i>Línies de l'Albarà</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light text-muted small text-uppercase">
+                                    <tr>
+                                        <th>Producte</th>
+                                        <th class="text-center">Quantitat</th>
+                                        <th class="text-end">Preu/u</th>
+                                        <th class="text-end">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for linia in albara.linies.all %}
+                                    <tr>
+                                        <td>{{ linia.nom_producte }}</td>
+                                        <td class="text-center">{{ linia.quantitat }}</td>
+                                        <td class="text-end">{{ linia.preu_unitari|floatformat:2 }} €</td>
+                                        <td class="text-end fw-medium">{{ linia.subtotal|floatformat:2 }} €</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="4" class="text-muted text-center">Cap línia afegida.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <td colspan="3" class="text-end"><strong>Base imposable:</strong></td>
+                                        <td class="text-end">{{ albara.base_imposable|floatformat:2 }} €</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="3" class="text-end"><strong>IVA:</strong></td>
+                                        <td class="text-end">{{ albara.total_iva|floatformat:2 }} €</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="3" class="text-end"><strong class="fs-5">TOTAL:</strong></td>
+                                        <td class="text-end fw-bold fs-5 text-primary">{{ albara.total|floatformat:2 }} €</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Per veure el detall complet de l'albarà, has d'iniciar sessió amb el correu associat al client.
+                </div>
+                {% endif %}
+
+                <div class="text-center mt-4">
+                    <a href="{% url 'consulta_form' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left me-1"></i>Nova consulta
+                    </a>
+                </div>
+
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}Preparació d'Albarans{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold mb-1">
+                    <i class="bi bi-clipboard-check me-2"></i>Preparació d'Albarans
+                </h2>
+                {% if empleat.magatzem_assignat %}
+                <p class="text-muted mb-0">
+                    <i class="bi bi-building me-1"></i>Magatzem: <span class="fw-medium">{{ empleat.magatzem_assignat.nom }}</span>
+                    | <i class="bi bi-person me-1"></i>Empleat: <span class="fw-medium">{{ empleat.codi_empleat }}</span>
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if not empleat.magatzem_assignat %}
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            No tens cap magatzem assignat. Contacta amb l'administrador.
+        </div>
+        {% else %}
+
+        {% for albara in albarans %}
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0 fw-bold">
+                        ALBARÀ #{{ albara.numero_albara }}
+                    </h5>
+                    <small class="text-muted">
+                        Client: <span class="fw-medium">{{ albara.client.nom_comercial }}</span> - {{ albara.client.codi_client }}
+                    </small>
+                </div>
+                <div class="text-end">
+                    {% if albara.estat == 'PENDENT' %}
+                    <span class="badge bg-warning text-dark fs-6">Pendent</span>
+                    {% elif albara.estat == 'EN_PREPARACIO' %}
+                    <span class="badge bg-info text-dark fs-6">En Preparació</span>
+                    {% endif %}
+                    <br>
+                    <small class="text-muted">Creat: {{ albara.data_creacio|date:"d/m/Y H:i" }}</small>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <h6 class="fw-bold mb-3"><i class="bi bi-list-ul me-2"></i>Productes:</h6>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th>Quantitat</th>
+                                <th>Producte</th>
+                                <th>Ubicació</th>
+                                <th>Stock</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for linia in albara.linies.all %}
+                            <tr {% if linia.stock_baix %}class="table-danger"{% endif %}>
+                                <td>
+                                    <span class="fw-bold">{{ linia.quantitat }}x</span>
+                                </td>
+                                <td>
+                                    {{ linia.nom_producte }}
+                                    {% if linia.producte %}
+                                    <span class="text-muted">({{ linia.producte.get_unitat_mesura_display }})</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ linia.ubicacio }}</span>
+                                </td>
+                                <td>
+                                    {% if linia.stock_baix %}
+                                    <span class="text-danger fw-bold">
+                                        ⚠️ Stock baix ({{ linia.stock_disponible }} disponibles)
+                                    </span>
+                                    {% elif linia.stock_disponible == 0 %}
+                                    <span class="text-danger fw-bold">
+                                        ❌ Sense stock
+                                    </span>
+                                    {% else %}
+                                    <span class="text-success">
+                                        <i class="bi bi-check-circle me-1"></i>{{ linia.stock_disponible }} disponibles
+                                    </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">Cap línia a l'albarà</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Totals -->
+                <div class="row mt-3">
+                    <div class="col-md-6 offset-md-6">
+                        <div class="bg-light rounded p-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted">Base imposable:</span>
+                                <span>{{ albara.base_imposable|floatformat:2 }} €</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted">IVA:</span>
+                                <span>{{ albara.total_iva|floatformat:2 }} €</span>
+                            </div>
+                            <hr class="my-2">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-bold">Total:</span>
+                                <span class="fw-bold fs-5">{{ albara.total|floatformat:2 }} €</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-footer bg-white border-0 d-flex justify-content-end">
+                <form method="post" action="{% url 'preparacio_marcar_preparat' albara.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success btn-lg" onclick="return confirm('Estàs segur de marcar aquest albarà com PREPARAT? S\'actualitzarà l\'stock automàticament.');">
+                        <i class="bi bi-check2-circle me-2"></i>Marcar com Preparat
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% empty %}
+        <div class="alert alert-info text-center">
+            <i class="bi bi-info-circle me-2"></i>
+            No hi ha albarans pendents de preparació al teu magatzem.
+        </div>
+        {% endfor %}
+
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

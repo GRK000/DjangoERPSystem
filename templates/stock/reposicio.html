@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block title %}Reposició d'Stock{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white border-0">
+                        <h4 class="mb-0 fw-bold">
+                            <i class="bi bi-plus-circle me-2 text-primary"></i>Nova Reposició d'Stock
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            {% csrf_token %}
+
+                            <div class="mb-3">
+                                <label for="id_producte" class="form-label fw-medium">Producte</label>
+                                {{ form.producte }}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="id_magatzem" class="form-label fw-medium">Magatzem</label>
+                                {{ form.magatzem }}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="id_quantitat" class="form-label fw-medium">Quantitat a afegir</label>
+                                {{ form.quantitat }}
+                            </div>
+
+                            <div class="mb-4">
+                                <label for="id_ubicacio" class="form-label fw-medium">Ubicació (passadís/estanteria)</label>
+                                {{ form.ubicacio }}
+                                <div class="form-text">Ex: A-12, B-03, C-15</div>
+                            </div>
+
+                            <div class="d-flex justify-content-between">
+                                <a href="{% url 'stock_list' %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-1"></i>Tornar
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check2 me-1"></i>Afegir Stock
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

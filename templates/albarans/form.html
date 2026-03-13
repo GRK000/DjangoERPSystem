@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if albara %}Editar Albarà{% else %}Nou Albarà{% endif %}{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0">
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb mb-0">
+                                <li class="breadcrumb-item"><a href="{% url 'albarans_list' %}">Albarans</a></li>
+                                <li class="breadcrumb-item active">{% if albara %}Editar{% else %}Nou{% endif %}</li>
+                            </ol>
+                        </nav>
+                    </div>
+                    <div class="card-body p-4">
+                        <h4 class="fw-bold mb-4">
+                            <i class="bi bi-{% if albara %}pencil{% else %}plus-circle{% endif %} me-2 text-primary"></i>
+                            {% if albara %}Editar Albarà #{{ albara.numero_albara }}{% else %}Nou Albarà{% endif %}
+                        </h4>
+
+                        <form method="post" novalidate>
+                            {% csrf_token %}
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.numero_albara.id_for_label }}" class="form-label fw-medium">
+                                        Número d'Albarà <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.numero_albara }}
+                                    {% if form.numero_albara.errors %}
+                                    <div class="text-danger small mt-1">{{ form.numero_albara.errors }}</div>
+                                    {% endif %}
+                                    <div class="form-text">Ex: ALB-2024-001</div>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.data_entrega_prevista.id_for_label }}" class="form-label fw-medium">
+                                        Data Entrega Prevista <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.data_entrega_prevista }}
+                                    {% if form.data_entrega_prevista.errors %}
+                                    <div class="text-danger small mt-1">{{ form.data_entrega_prevista.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.client.id_for_label }}" class="form-label fw-medium">
+                                        Client <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.client }}
+                                    {% if form.client.errors %}
+                                    <div class="text-danger small mt-1">{{ form.client.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.magatzem.id_for_label }}" class="form-label fw-medium">
+                                        Magatzem
+                                    </label>
+                                    {{ form.magatzem }}
+                                    {% if form.magatzem.errors %}
+                                    <div class="text-danger small mt-1">{{ form.magatzem.errors }}</div>
+                                    {% endif %}
+                                    <div class="form-text">D'on sortirà la mercaderia</div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.estat.id_for_label }}" class="form-label fw-medium">
+                                    Estat
+                                </label>
+                                {{ form.estat }}
+                                {% if form.estat.errors %}
+                                <div class="text-danger small mt-1">{{ form.estat.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.observacions.id_for_label }}" class="form-label fw-medium">
+                                    Observacions
+                                </label>
+                                {{ form.observacions }}
+                                {% if form.observacions.errors %}
+                                <div class="text-danger small mt-1">{{ form.observacions.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <hr class="my-4">
+
+                            <div class="d-flex justify-content-between">
+                                <a href="{% url 'albarans_list' %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-1"></i> Tornar
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check2 me-1"></i> {% if albara %}Actualitzar{% else %}Crear Albarà{% endif %}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</section>
+{% endblock %}

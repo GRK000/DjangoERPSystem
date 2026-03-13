@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Consulta d'Albarà{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-5 text-center">
+                        <div class="mb-4">
+                            <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
+                                <i class="bi bi-search text-primary" style="font-size: 2rem;"></i>
+                            </div>
+                            <h3 class="fw-bold">Consulta d'Albarà</h3>
+                            <p class="text-muted">Introdueix el número d'albarà per consultar el seu estat</p>
+                        </div>
+
+                        <form method="get" action="{% url 'consulta_resultat' %}">
+                            <div class="mb-4">
+                                <label for="numero" class="form-label fw-medium">Número d'Albarà</label>
+                                <div class="input-group input-group-lg">
+                                    <span class="input-group-text"><i class="bi bi-hash"></i></span>
+                                    <input type="text" name="numero" id="numero" class="form-control" placeholder="ALB-2024-001" required autofocus>
+                                </div>
+                                <div class="form-text">Exemple: ALB-2024-001</div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <i class="bi bi-search me-2"></i>Consultar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

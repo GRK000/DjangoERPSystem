@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block title %}Llistat de Clients{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+
+        <!-- HEADER -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold mb-1"><i class="bi bi-people me-2"></i>Clients Actius</h2>
+                <p class="text-muted mb-0">Gestió de la cartera de clients</p>
+            </div>
+            <a href="{% url 'client_create' %}" class="btn btn-primary">
+                <i class="bi bi-person-plus me-2"></i> Afegir Client
+            </a>
+        </div>
+
+        <!-- TABLE -->
+        <div class="table-responsive shadow-sm rounded-4 overflow-hidden border bg-white">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-uppercase small text-muted">
+                    <tr>
+                        <th scope="col">Codi</th>
+                        <th scope="col">Nom Comercial</th>
+                        <th scope="col">CIF</th>
+                        <th scope="col">Població</th>
+                        <th scope="col">Telèfon</th>
+                        <th scope="col">Email</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for client in clients %}
+                        <tr class="border-bottom">
+                            <td>
+                                <a href="{% url 'client_detail' client.id %}" class="fw-semibold text-decoration-none text-primary">
+                                    {{ client.codi_client }}
+                                </a>
+                            </td>
+                            <td>{{ client.nom_comercial }}</td>
+                            <td>{{ client.cif }}</td>
+                            <td>{{ client.poblacio }}</td>
+                            <td>{{ client.telefon }}</td>
+                            <td><a href="mailto:{{ client.email }}" class="text-decoration-none">{{ client.email }}</a></td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox me-2"></i>No s'han trobat clients actius.
+                                <br><a href="{% url 'client_create' %}" class="mt-2 d-inline-block">Afegir el primer client</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</section>
+{% endblock %}

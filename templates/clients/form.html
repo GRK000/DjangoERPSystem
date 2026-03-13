@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if client %}Editar Client{% else %}Nou Client{% endif %}{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-0">
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb mb-0">
+                                <li class="breadcrumb-item"><a href="{% url 'clients_list' %}">Clients</a></li>
+                                <li class="breadcrumb-item active">{% if client %}Editar{% else %}Nou{% endif %}</li>
+                            </ol>
+                        </nav>
+                    </div>
+                    <div class="card-body p-4">
+                        <h4 class="fw-bold mb-4">
+                            <i class="bi bi-{% if client %}pencil{% else %}person-plus{% endif %} me-2 text-primary"></i>
+                            {% if client %}Editar Client: {{ client.nom_comercial }}{% else %}Nou Client{% endif %}
+                        </h4>
+
+                        <form method="post" novalidate>
+                            {% csrf_token %}
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.codi_client.id_for_label }}" class="form-label fw-medium">
+                                        Codi Client <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.codi_client }}
+                                    {% if form.codi_client.errors %}
+                                    <div class="text-danger small mt-1">{{ form.codi_client.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.cif.id_for_label }}" class="form-label fw-medium">
+                                        CIF <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.cif }}
+                                    {% if form.cif.errors %}
+                                    <div class="text-danger small mt-1">{{ form.cif.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.nom_comercial.id_for_label }}" class="form-label fw-medium">
+                                    Nom Comercial <span class="text-danger">*</span>
+                                </label>
+                                {{ form.nom_comercial }}
+                                {% if form.nom_comercial.errors %}
+                                <div class="text-danger small mt-1">{{ form.nom_comercial.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <h6 class="text-muted text-uppercase small mt-4 mb-3">
+                                <i class="bi bi-person me-1"></i> Dades de Contacte
+                            </h6>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.persona_contacte.id_for_label }}" class="form-label fw-medium">
+                                        Persona de Contacte <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.persona_contacte }}
+                                    {% if form.persona_contacte.errors %}
+                                    <div class="text-danger small mt-1">{{ form.persona_contacte.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.telefon.id_for_label }}" class="form-label fw-medium">
+                                        Telèfon <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.telefon }}
+                                    {% if form.telefon.errors %}
+                                    <div class="text-danger small mt-1">{{ form.telefon.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.email.id_for_label }}" class="form-label fw-medium">
+                                    Email <span class="text-danger">*</span>
+                                </label>
+                                {{ form.email }}
+                                {% if form.email.errors %}
+                                <div class="text-danger small mt-1">{{ form.email.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <h6 class="text-muted text-uppercase small mt-4 mb-3">
+                                <i class="bi bi-geo-alt me-1"></i> Adreça d'Entrega
+                            </h6>
+
+                            <div class="mb-3">
+                                <label for="{{ form.adreca_entrega.id_for_label }}" class="form-label fw-medium">
+                                    Adreça <span class="text-danger">*</span>
+                                </label>
+                                {{ form.adreca_entrega }}
+                                {% if form.adreca_entrega.errors %}
+                                <div class="text-danger small mt-1">{{ form.adreca_entrega.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-8 mb-3">
+                                    <label for="{{ form.poblacio.id_for_label }}" class="form-label fw-medium">
+                                        Població <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.poblacio }}
+                                    {% if form.poblacio.errors %}
+                                    <div class="text-danger small mt-1">{{ form.poblacio.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="{{ form.codi_postal.id_for_label }}" class="form-label fw-medium">
+                                        Codi Postal <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.codi_postal }}
+                                    {% if form.codi_postal.errors %}
+                                    <div class="text-danger small mt-1">{{ form.codi_postal.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.actiu }}
+                                    <label class="form-check-label" for="{{ form.actiu.id_for_label }}">
+                                        Client actiu
+                                    </label>
+                                </div>
+                            </div>
+
+                            <hr class="my-4">
+
+                            <div class="d-flex justify-content-between">
+                                <a href="{% url 'clients_list' %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-1"></i> Tornar
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check2 me-1"></i> {% if client %}Actualitzar{% else %}Crear Client{% endif %}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</section>
+{% endblock %}

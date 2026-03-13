@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% block title %}Detall de l'Albarà #{{ albara.numero_albara }}{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+
+        <!-- HEADER -->
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'albarans_list' %}">Albarans</a></li>
+                        <li class="breadcrumb-item active">#{{ albara.numero_albara }}</li>
+                    </ol>
+                </nav>
+                <h2 class="fw-bold mb-1">Albarà #{{ albara.numero_albara }}</h2>
+                <p class="text-muted mb-0">
+                    Client: <a href="{% url 'client_detail' albara.client.id %}" class="fw-medium text-decoration-none">{{ albara.client.nom_comercial }}</a>
+                    <span class="badge bg-light text-dark ms-2">{{ albara.client.codi_client }}</span>
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                {% if albara.pot_afegir_linies %}
+                <a href="{% url 'linia_add' albara.id %}" class="btn btn-outline-primary">
+                    <i class="bi bi-plus-circle me-1"></i> Afegir Línia
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ALERTES STOCK BAIX -->
+        {% if alertes_stock %}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <h6 class="alert-heading fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>⚠️ Atenció: Stock baix</h6>
+            <ul class="mb-0">
+                {% for alerta in alertes_stock %}
+                <li><strong>{{ alerta.linia.nom_producte }}</strong>: només {{ alerta.stock }} unitats disponibles</li>
+                {% endfor %}
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        <!-- INFO CARDS -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Data de creació</div>
+                        <div class="fw-medium fs-5">{{ albara.data_creacio|date:"d/m/Y H:i" }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Entrega Prevista</div>
+                        <div class="fw-medium fs-5">{{ albara.data_entrega_prevista|date:"d/m/Y" }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Estat</div>
+                        <div class="mt-1">
+                            {% if albara.estat == 'PENDENT' %}
+                                <span class="badge bg-warning text-dark fs-6">⏳ Pendent</span>
+                            {% elif albara.estat == 'EN_PREPARACIO' %}
+                                <span class="badge bg-info text-dark fs-6">📦 En Preparació</span>
+                            {% elif albara.estat == 'PREPARAT' %}
+                                <span class="badge bg-primary fs-6">✓ Preparat</span>
+                            {% elif albara.estat == 'ENVIAT' %}
+                                <span class="badge bg-secondary fs-6">🚚 Enviat</span>
+                            {% elif albara.estat == 'ENTREGAT' %}
+                                <span class="badge bg-success fs-6">✅ Entregat</span>
+                            {% elif albara.estat == 'CANCELAT' %}
+                                <span class="badge bg-danger fs-6">❌ Cancel·lat</span>
+                            {% else %}
+                                <span class="badge bg-secondary fs-6">{{ albara.get_estat_display }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Magatzem</div>
+                        <div class="fw-medium fs-5">{{ albara.magatzem.nom|default:"-" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CANVI D'ESTAT -->
+        {% if estats_possibles %}
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3"><i class="bi bi-arrow-repeat me-2"></i>Canviar Estat</h6>
+                <form method="post" action="{% url 'albara_change_state' albara.id %}" class="row g-3 align-items-end">
+                    {% csrf_token %}
+                    <div class="col-md-4">
+                        <label for="nou_estat" class="form-label">Nou estat</label>
+                        <select name="nou_estat" id="nou_estat" class="form-select">
+                            {% for estat in estats_possibles %}
+                            <option value="{{ estat.0 }}">{{ estat.1 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check2 me-1"></i>Canviar Estat
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- LINIES -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0 fw-bold">
+                    <i class="bi bi-list-ul me-2"></i>Línies de l'Albarà
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th>Producte</th>
+                                <th class="text-center">Quantitat</th>
+                                <th class="text-end">Preu Unit.</th>
+                                <th class="text-center">IVA</th>
+                                <th class="text-center">Descompte</th>
+                                <th class="text-end">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for linia in linies %}
+                            <tr>
+                                <td>
+                                    <span class="fw-medium">{{ linia.nom_producte }}</span>
+                                    {% if linia.observacions %}
+                                    <br><small class="text-muted"><i class="bi bi-chat-left-text me-1"></i>{{ linia.observacions }}</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">{{ linia.quantitat }}</td>
+                                <td class="text-end">{{ linia.preu_unitari|floatformat:2 }} €</td>
+                                <td class="text-center"><span class="badge bg-light text-dark">{{ linia.iva|floatformat:0 }}%</span></td>
+                                <td class="text-center">
+                                    {% if linia.descompte_percentatge > 0 %}
+                                    <span class="badge bg-success">-{{ linia.descompte_percentatge|floatformat:0 }}%</span>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td class="text-end fw-medium">{{ linia.subtotal|floatformat:2 }} €</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox me-2"></i>Cap línia afegida.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOTALS -->
+        <div class="row">
+            <div class="col-md-6 offset-md-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Base imposable:</span>
+                            <span>{{ albara.base_imposable|floatformat:2 }} €</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">IVA:</span>
+                            <span>{{ albara.total_iva|floatformat:2 }} €</span>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-bold fs-5">TOTAL:</span>
+                            <span class="fw-bold fs-5 text-primary">{{ albara.total|floatformat:2 }} €</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OBSERVACIONS -->
+        {% if albara.observacions %}
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-body">
+                <h6 class="fw-bold mb-2"><i class="bi bi-chat-square-text me-2"></i>Observacions</h6>
+                <p class="mb-0">{{ albara.observacions }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- INFO ADICIONAL -->
+        {% if albara.signatura_client %}
+        <div class="alert alert-success mt-4">
+            <i class="bi bi-pen me-2"></i>
+            <strong>Signat per:</strong> {{ albara.signatura_client }}
+        </div>
+        {% endif %}
+
+    </div>
+</section>
+{% endblock %}

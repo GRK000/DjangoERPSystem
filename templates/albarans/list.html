@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block title %}Albarans{% endblock %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold mb-1"><i class="bi bi-file-earmark-text me-2"></i>Albarans</h2>
+                <p class="text-muted mb-0">Gestió d'albarans de la distribuïdora</p>
+            </div>
+            <a href="{% url 'albara_create' %}" class="btn btn-primary btn-lg">
+                <i class="bi bi-plus-circle me-2"></i> Nou Albarà
+            </a>
+        </div>
+
+        <!-- Fancy Table -->
+        <div class="table-responsive shadow-sm rounded-4 overflow-hidden border bg-white">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr class="text-uppercase small text-muted">
+                        <th scope="col">Número</th>
+                        <th scope="col">Client</th>
+                        <th scope="col">Magatzem</th>
+                        <th scope="col">Data</th>
+                        <th scope="col">Estat</th>
+                        <th scope="col" class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for albara in albarans %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'albara_detail' albara.id %}" class="fw-semibold text-decoration-none text-primary">
+                                    #{{ albara.numero_albara }}
+                                </a>
+                            </td>
+                            <td class="text-body">
+                                <a href="{% url 'client_detail' albara.client.id %}" class="text-decoration-none">
+                                    {{ albara.client.nom_comercial }}
+                                </a>
+                            </td>
+                            <td class="text-muted">{{ albara.magatzem.nom|default:"-" }}</td>
+                            <td class="text-secondary">{{ albara.data_creacio|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                {% if albara.estat == 'PENDENT' %}
+                                    <span class="badge rounded-pill bg-warning text-dark">⏳ Pendent</span>
+                                {% elif albara.estat == 'EN_PREPARACIO' %}
+                                    <span class="badge rounded-pill bg-info text-dark">📦 En Preparació</span>
+                                {% elif albara.estat == 'PREPARAT' %}
+                                    <span class="badge rounded-pill bg-primary">✓ Preparat</span>
+                                {% elif albara.estat == 'ENVIAT' %}
+                                    <span class="badge rounded-pill bg-secondary">🚚 Enviat</span>
+                                {% elif albara.estat == 'ENTREGAT' %}
+                                    <span class="badge rounded-pill bg-success">✅ Entregat</span>
+                                {% elif albara.estat == 'CANCELAT' %}
+                                    <span class="badge rounded-pill bg-danger">❌ Cancel·lat</span>
+                                {% else %}
+                                    <span class="badge rounded-pill bg-secondary">{{ albara.get_estat_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end text-body fw-medium">{{ albara.total|floatformat:2 }} €</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox me-2"></i>No s'han trobat albarans.
+                                <br><a href="{% url 'albara_create' %}" class="mt-2 d-inline-block">Crear el primer albarà</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}

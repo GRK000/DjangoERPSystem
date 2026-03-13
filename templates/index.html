@@ -1,0 +1,226 @@
+{% extends 'base.html' %}
+
+{% block title %}ERP Distribuïdora - Inici{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="py-5 bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+    <div class="container">
+        <div class="row justify-content-center align-items-center text-center text-white">
+            <div class="col-xl-8">
+                <span class="badge bg-white text-primary px-3 py-2 mb-4 rounded-pill shadow text-uppercase fw-bold">
+                    <i class="bi bi-lightning-charge me-1"></i>Sistema de Gestió de Distribuïdora
+                </span>
+
+                <h1 class="display-3 fw-bold mb-3 text-black">
+                    Control Total del teu<br>
+                    <span style="text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">Negoci de Distribució</span>
+                </h1>
+
+                <p class="lead mb-5 opacity-75">
+                    Gestiona clients, productes, albarans, stock i estadístiques en una sola plataforma.
+                </p>
+
+                {% if user.is_authenticated %}
+                <div class="d-flex flex-column flex-md-row justify-content-center gap-3">
+                    <a href="{% url 'albara_create' %}" class="btn btn-light btn-lg px-4 py-3 shadow">
+                        <i class="bi bi-plus-circle me-2"></i>Nou Albarà
+                    </a>
+                    <a href="{% url 'cataleg' %}" class="btn btn-light btn-lg px-4 py-3 shadow">
+                        <i class="bi bi-grid me-2"></i>Veure Catàleg
+                    </a>
+                </div>
+                {% else %}
+                <div class="d-flex flex-column flex-md-row justify-content-center align-items-center gap-3">
+                    <a href="{% url 'login' %}" class="btn btn-light btn-lg px-4 py-3 shadow">
+                        <i class="bi bi-box-arrow-in-right me-2"></i>Iniciar sesión
+                    </a>
+                    <a href="{% url 'register' %}" class="btn btn-light btn-lg px-4 py-3 shadow">
+                        <i class="bi bi-person-plus me-2"></i>Registrarse
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Stats Section -->
+<section class="py-5 bg-light">
+    <div class="container">
+        <div class="row g-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100 text-center">
+                    <div class="card-body py-4">
+                        <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                            <i class="bi bi-people text-primary fs-3"></i>
+                        </div>
+                        <h2 class="fw-bold text-primary mb-0">{{ total_clients }}</h2>
+                        <p class="text-muted mb-0">Clients Actius</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100 text-center">
+                    <div class="card-body py-4">
+                        <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                            <i class="bi bi-file-earmark-text text-success fs-3"></i>
+                        </div>
+                        <h2 class="fw-bold text-success mb-0">{{ total_albarans }}</h2>
+                        <p class="text-muted mb-0">Albarans Totals</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100 text-center">
+                    <div class="card-body py-4">
+                        <div class="rounded-circle bg-info bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                            <i class="bi bi-box-seam text-info fs-3"></i>
+                        </div>
+                        <h2 class="fw-bold text-info mb-0">{{ total_productes }}</h2>
+                        <p class="text-muted mb-0">Productes Actius</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100 text-center">
+                    <div class="card-body py-4">
+                        <div class="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                            <i class="bi bi-clock-history text-warning fs-3"></i>
+                        </div>
+                        <h2 class="fw-bold text-warning mb-0">{{ albarans_pendents }}</h2>
+                        <p class="text-muted mb-0">Albarans Pendents</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Quick Access Section -->
+<section class="py-5">
+    <div class="container">
+        <h3 class="fw-bold text-center mb-5">
+            <i class="bi bi-lightning-charge text-primary me-2"></i>Accés Ràpid
+        </h3>
+
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded bg-primary bg-opacity-10 p-3 me-3">
+                                <i class="bi bi-people text-primary fs-4"></i>
+                            </div>
+                            <h5 class="mb-0 fw-bold">Clients</h5>
+                        </div>
+                        <p class="text-muted">Gestiona la teva cartera de clients, afegeix nous o edita els existents.</p>
+                        <a href="{% url 'clients_list' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-right me-1"></i>Veure Clients
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded bg-success bg-opacity-10 p-3 me-3">
+                                <i class="bi bi-grid text-success fs-4"></i>
+                            </div>
+                            <h5 class="mb-0 fw-bold">Catàleg</h5>
+                        </div>
+                        <p class="text-muted">Explora el catàleg de productes organitzat per categories.</p>
+                        <a href="{% url 'cataleg' %}" class="btn btn-outline-success">
+                            <i class="bi bi-arrow-right me-1"></i>Veure Catàleg
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded bg-warning bg-opacity-10 p-3 me-3">
+                                <i class="bi bi-search text-warning fs-4"></i>
+                            </div>
+                            <h5 class="mb-0 fw-bold">Consulta Pública</h5>
+                        </div>
+                        <p class="text-muted">Consulta l'estat d'un albarà mitjançant el seu número.</p>
+                        <a href="{% url 'consulta_form' %}" class="btn btn-outline-warning">
+                            <i class="bi bi-arrow-right me-1"></i>Consultar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if user.is_authenticated %}
+        <div class="row g-4 mt-3">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded bg-info bg-opacity-10 p-3 me-3">
+                                <i class="bi bi-file-earmark-text text-info fs-4"></i>
+                            </div>
+                            <h5 class="mb-0 fw-bold">Albarans</h5>
+                        </div>
+                        <p class="text-muted">Crea i gestiona els albarans de la distribuïdora.</p>
+                        <a href="{% url 'albarans_list' %}" class="btn btn-outline-info">
+                            <i class="bi bi-arrow-right me-1"></i>Veure Albarans
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded bg-danger bg-opacity-10 p-3 me-3">
+                                <i class="bi bi-boxes text-danger fs-4"></i>
+                            </div>
+                            <h5 class="mb-0 fw-bold">Stock</h5>
+                        </div>
+                        <p class="text-muted">Control d'inventari i reposició de productes.</p>
+                        <a href="{% url 'stock_list' %}" class="btn btn-outline-danger">
+                            <i class="bi bi-arrow-right me-1"></i>Gestionar Stock
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rounded bg-secondary bg-opacity-10 p-3 me-3">
+                                <i class="bi bi-bar-chart text-secondary fs-4"></i>
+                            </div>
+                            <h5 class="mb-0 fw-bold">Estadístiques</h5>
+                        </div>
+                        <p class="text-muted">Anàlisi de vendes, productes i rendiment.</p>
+                        <a href="{% url 'estadistiques' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-right me-1"></i>Veure Estadístiques
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- Footer Quote -->
+<section class="py-4 bg-light border-top">
+    <div class="container text-center">
+        <p class="text-muted fst-italic mb-0">
+            <i class="bi bi-quote me-1"></i>
+            "La millor manera de predir el futur és crear-lo." - Peter Drucker
+        </p>
+    </div>
+</section>
+{% endblock %}
