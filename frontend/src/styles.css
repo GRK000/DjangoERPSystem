@@ -1164,6 +1164,117 @@ tbody tr:hover {
   margin: 0;
 }
 
+.agent-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.agent-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-suggestions button,
+.agent-feedback button {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: rgba(8, 10, 18, 0.42);
+  padding: 0 10px;
+  font-weight: 750;
+}
+
+.agent-suggestions button:hover,
+.agent-feedback button:hover {
+  border-color: var(--cyan);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.agent-thread {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.agent-message {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(8, 10, 18, 0.28);
+  padding: 13px;
+}
+
+.agent-message-user {
+  border-color: rgba(34, 211, 238, 0.28);
+}
+
+.agent-message-assistant {
+  border-color: rgba(139, 92, 246, 0.28);
+}
+
+.agent-message > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--cyan);
+}
+
+.agent-message pre {
+  white-space: pre-wrap;
+  margin: 0;
+  color: #d8deeb;
+  font-family: inherit;
+  line-height: 1.55;
+}
+
+.agent-run-details {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.agent-mini-panel {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid rgba(39, 50, 74, 0.8);
+  border-radius: var(--radius);
+  background: rgba(16, 21, 34, 0.55);
+}
+
+.agent-mini-panel > div,
+.agent-actions,
+.agent-feedback {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.agent-mini-panel a,
+.agent-mini-panel span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.agent-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.agent-compose textarea {
+  width: 100%;
+  min-height: 82px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: rgba(8, 10, 18, 0.68);
+  padding: 12px;
+  resize: vertical;
+}
+
 .auth-frame {
   min-height: 70vh;
   display: grid;
@@ -1602,6 +1713,34 @@ html[data-density="operator"] .prep-table-actions .row-action {
   height: 28px;
 }
 
+html[data-density="operator"] .agent-layout {
+  gap: 10px;
+}
+
+html[data-density="operator"] .agent-message {
+  padding: 10px;
+}
+
+html[data-density="operator"] .agent-message pre {
+  line-height: 1.4;
+  font-size: 13px;
+}
+
+html[data-density="operator"] .agent-suggestions button,
+html[data-density="operator"] .agent-feedback button {
+  min-height: 28px;
+  font-size: 12px;
+}
+
+html[data-density="operator"] .agent-compose textarea {
+  min-height: 64px;
+  padding: 9px;
+}
+
+html[data-density="operator"] .agent-mini-panel {
+  padding: 7px;
+}
+
 html[data-density="operator"] .risk-row td {
   background: rgba(251, 113, 133, 0.07);
 }
@@ -1700,9 +1839,14 @@ html[data-density="operator"] .risk-row:hover td {
   .form-actions,
   .inline-form,
   .lookup-form,
-  .entity-head {
+  .entity-head,
+  .agent-compose {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .agent-compose {
+    display: flex;
   }
 
   .panel-head {

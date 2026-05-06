@@ -39,6 +39,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { agentGet, agentPost, AgentConversation, AgentEvidence, AgentMessage, AgentRunResponse, AgentStatus, AgentSuggestedAction, AgentToolCall } from "./api/agent";
 import "./styles.css";
 
 type AppUser = {
@@ -706,7 +707,7 @@ function PageRenderer({ data }: { data: InitialData }) {
     case "linia_form":
       return <LineFormPage {...props} />;
     case "consulta_form":
-      return <ConsultaForm csrfToken={data.csrfToken} />;
+      return <AgentConsole csrfToken={data.csrfToken} user={data.user} />;
     case "consulta_result":
       return <ConsultaResult {...props} />;
     case "preparacio":
@@ -1286,16 +1287,268 @@ function LineFormPage({ payload, csrfToken }: { payload: Record<string, any>; cs
   );
 }
 
-function ConsultaForm({ csrfToken }: { csrfToken: string }) {
+type AgentHistoryItem = {
+  role: "user" | "assistant";
+  content: string;
+  run?: AgentRunResponse;
+};
+
+function agentArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : [];
+}
+
+function messageToHistoryItem(message: AgentMessage, conversationId: number): AgentHistoryItem | null {
+  if (message.role !== "user" && message.role !== "assistant") return null;
+  if (message.role === "user") return { role: "user", content: message.content };
+  const metadata = message.metadata || {};
+  const runId = typeof metadata.run_id === "number" ? metadata.run_id : 0;
+  const run = runId ? {
+    conversation_id: conversationId,
+    run_id: runId,
+    answer: message.content,
+    evidence: agentArray<AgentEvidence>(metadata.evidence),
+    suggested_actions: agentArray<AgentSuggestedAction>(metadata.suggested_actions),
+    tool_calls: agentArray<AgentToolCall>(metadata.tool_calls),
+    status: metadata.status === "blocked" ? "blocked" as const : "ok" as const,
+  } : undefined;
+  return { role: "assistant", content: message.content, run };
+}
+
+function AgentConsole({ csrfToken, user }: { csrfToken: string; user: AppUser }) {
+  const { density } = useDensity();
+  const [status, setStatus] = useState<AgentStatus | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
+  const [conversationId, setConversationId] = useState<number | null>(null);
+  const [history, setHistory] = useState<AgentHistoryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [conversationLoading, setConversationLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!user.isAuthenticated) return;
+    agentGet<AgentStatus>("/api/agent/status/")
+      .then(setStatus)
+      .catch((err) => setError(err.message));
+    agentGet<{ suggestions: string[] }>("/api/agent/suggestions/")
+      .then((payload) => setSuggestions(payload.suggestions || []))
+      .catch(() => setSuggestions([]));
+    loadLatestConversation();
+  }, [user.isAuthenticated]);
+
+  async function loadLatestConversation() {
+    setConversationLoading(true);
+    try {
+      const payload = await agentGet<{ conversations: AgentConversation[] }>("/api/agent/conversations/");
+      const latest = payload.conversations?.[0];
+      if (latest) {
+        await loadConversation(latest.id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo cargar la conversacion anterior.");
+    } finally {
+      setConversationLoading(false);
+    }
+  }
+
+  async function loadConversation(id: number) {
+    const payload = await agentGet<{ conversation: AgentConversation }>(`/api/agent/conversations/${id}/`);
+    const conversation = payload.conversation;
+    setConversationId(conversation.id);
+    setHistory((conversation.messages || [])
+      .map((item) => messageToHistoryItem(item, conversation.id))
+      .filter((item): item is AgentHistoryItem => Boolean(item)));
+  }
+
+  async function newChat() {
+    if (loading || conversationLoading) return;
+    setConversationLoading(true);
+    setError("");
+    try {
+      const payload = await agentPost<{ conversation: AgentConversation }>("/api/agent/conversations/", csrfToken, {
+        title: "Consulta operativa",
+      });
+      setConversationId(payload.conversation.id);
+      setHistory([]);
+      setMessage("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo crear un nuevo chat.");
+    } finally {
+      setConversationLoading(false);
+    }
+  }
+
+  async function submit(nextMessage?: string) {
+    const text = (nextMessage || message).trim();
+    if (!text || loading) return;
+    setLoading(true);
+    setError("");
+    setHistory((items) => [...items, { role: "user", content: text }]);
+    setMessage("");
+    try {
+      const response = await agentPost<AgentRunResponse>("/api/agent/run/", csrfToken, {
+        conversation_id: conversationId,
+        message: text,
+        page_context: {
+          route: window.location.pathname,
+          density_mode: density,
+        },
+      });
+      setConversationId(response.conversation_id);
+      setHistory((items) => [...items, { role: "assistant", content: response.answer, run: response }]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo consultar Aurora Operator.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendFeedback(runId: number, rating: "useful" | "not_useful") {
+    try {
+      await agentPost("/api/agent/feedback/", csrfToken, { run_id: runId, rating });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar feedback.");
+    }
+  }
+
+  if (!user.isAuthenticated) {
+    return (
+      <div className="agent-layout">
+        <PageHeader
+          variant={density === "operator" ? "operator" : "compact"}
+          eyebrow="Aurora Operator"
+          title="Consulta operativa"
+          description="Inicia sesion para consultar albaranes, stock, preparacion y analitica con contexto del ERP."
+          actions={<ActionLink href="/login/?next=/consulta/"><LogIn size={16} /> Entrar</ActionLink>}
+        />
+        <Panel title="Consulta publica de albaran" eyebrow="Tracking">
+          <form className="lookup-form" method="get" action="/consulta/resultat/">
+            <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
+            <Search size={20} />
+            <input name="numero" placeholder="ALB-2026-001" required />
+            <SubmitButton><Eye size={16} /> Consultar</SubmitButton>
+          </form>
+        </Panel>
+      </div>
+    );
+  }
+
   return (
-    <Panel title="Consulta publica de albaran" eyebrow="Tracking">
-      <form className="lookup-form" method="get" action="/consulta/resultat/">
-        <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
-        <Search size={20} />
-        <input name="numero" placeholder="ALB-2026-001" required />
-        <SubmitButton><Eye size={16} /> Consultar</SubmitButton>
-      </form>
-    </Panel>
+    <div className="agent-layout">
+      <PageHeader
+        variant={density === "operator" ? "operator" : "compact"}
+        eyebrow="Aurora Operator"
+        title="Consulta operativa"
+        description="Agente read-only para analizar albaranes, preparacion, stock, clientes y ventas."
+        meta={status ? <AgentStatusPill status={status} /> : <Badge tone="neutral">Cargando estado</Badge>}
+        actions={<button className="btn btn-ghost" type="button" onClick={newChat} disabled={loading || conversationLoading}><Plus size={16} /> Nuevo chat</button>}
+      />
+      {error && <div className="notice notice-warning"><AlertTriangle size={18} /> {error}</div>}
+      {status?.missing_api_key && (
+        <div className="notice notice-warning">
+          <AlertTriangle size={18} /> El agente esta configurado pero falta AI_API_KEY en el entorno.
+        </div>
+      )}
+      {status?.mock_mode && (
+        <div className="notice notice-warning">
+          <Shield size={18} /> Modo mock activo. Las respuestas usan router local y tools read-only.
+        </div>
+      )}
+      <Panel title="Preguntas sugeridas" eyebrow="Arranque rapido">
+        <div className="agent-suggestions">
+          {suggestions.map((suggestion) => (
+            <button key={suggestion} type="button" onClick={() => submit(suggestion)}>
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      </Panel>
+      <Panel title="Conversacion" eyebrow={conversationLoading ? "Cargando" : conversationId ? `ID ${conversationId}` : "Nueva"}>
+        <div className="agent-thread">
+          {conversationLoading && !history.length ? (
+            <EmptyState icon={<RefreshCw size={28} />} title="Cargando conversacion" text="Recuperando el ultimo chat operativo." />
+          ) : history.length ? (
+            history.map((item, index) => (
+              <article key={`${item.role}-${index}`} className={`agent-message agent-message-${item.role}`}>
+                <strong>{item.role === "user" ? "Tu" : "Aurora Operator"}</strong>
+                <pre>{item.content}</pre>
+                {item.run && <AgentRunDetails run={item.run} onFeedback={sendFeedback} />}
+              </article>
+            ))
+          ) : (
+            <EmptyState icon={<Command size={28} />} title="Sin conversacion" text="Lanza una consulta operativa o usa una sugerencia." />
+          )}
+        </div>
+        <form className="agent-compose" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+          <textarea
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder="Pregunta por albaranes preparables, stock bajo, bloqueos o ventas..."
+            maxLength={2000}
+            rows={3}
+          />
+          <button className="btn btn-primary" type="submit" disabled={loading || !message.trim()}>
+            {loading ? <RefreshCw size={16} /> : <ArrowRight size={16} />}
+            {loading ? "Consultando" : "Enviar"}
+          </button>
+        </form>
+      </Panel>
+    </div>
+  );
+}
+
+function AgentStatusPill({ status }: { status: AgentStatus }) {
+  const tone = status.mock_mode ? "warning" : status.available ? "success" : "danger";
+  return <Badge tone={tone}>{status.mock_mode ? "Mock" : status.available ? status.provider : "No disponible"} · {status.model || "sin modelo"}</Badge>;
+}
+
+function AgentRunDetails({ run, onFeedback }: { run: AgentRunResponse; onFeedback: (runId: number, rating: "useful" | "not_useful") => void }) {
+  return (
+    <div className="agent-run-details">
+      <AgentEvidenceList evidence={run.evidence} />
+      <AgentToolCalls calls={run.tool_calls} />
+      <AgentActions actions={run.suggested_actions} />
+      <div className="agent-feedback">
+        <button type="button" onClick={() => onFeedback(run.run_id, "useful")}>Util</button>
+        <button type="button" onClick={() => onFeedback(run.run_id, "not_useful")}>No util</button>
+      </div>
+    </div>
+  );
+}
+
+function AgentEvidenceList({ evidence }: { evidence: AgentEvidence[] }) {
+  if (!evidence.length) return null;
+  return (
+    <div className="agent-mini-panel">
+      <strong>Evidencia</strong>
+      <div>
+        {evidence.slice(0, 8).map((item, index) => (
+          item.url ? <a key={`${item.label}-${index}`} href={item.url}>{item.label}</a> : <span key={`${item.label}-${index}`}>{item.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AgentToolCalls({ calls }: { calls: AgentToolCall[] }) {
+  if (!calls.length) return null;
+  return (
+    <div className="agent-mini-panel">
+      <strong>Tools</strong>
+      <div>
+        {calls.map((call) => <span key={call.name}><Badge tone={call.status === "ok" ? "success" : call.status === "empty" ? "neutral" : "warning"}>{call.name}</Badge></span>)}
+      </div>
+    </div>
+  );
+}
+
+function AgentActions({ actions }: { actions: AgentSuggestedAction[] }) {
+  const safe = actions.filter((action) => action.target.startsWith("/"));
+  if (!safe.length) return null;
+  return (
+    <div className="agent-actions">
+      {safe.map((action) => <a key={`${action.type}-${action.target}-${action.label}`} className="btn btn-ghost" href={action.target}>{action.label}</a>)}
+    </div>
   );
 }
 

@@ -1,0 +1,242 @@
+import json
+import re
+import time
+from typing import Any
+
+from django.conf import settings
+from django.db import transaction
+
+from aurora_agent.models import AgentConversation, AgentMessage, AgentRun, AgentToolCall
+from aurora_agent.services.formatter import compact_tool_result, format_final_answer, normalize_text
+from aurora_agent.services.llm import get_llm_client
+from aurora_agent.services.prompts import PLAN_PROMPT, SYSTEM_PROMPT
+from aurora_agent.services.safety import check_input_safety, refusal_payload
+from aurora_agent.tools.registry import TOOLS, get_tool
+
+
+ALLOWED_ACTION_TARGETS = {"/", "/albarans/", "/preparacio/", "/stock/", "/cataleg/", "/clients/", "/estadistiques/"}
+
+
+def parse_json_object(text):
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", text or "", flags=re.S)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return {}
+    return {}
+
+
+def route_tools(message: str, page_context=None):
+    text = normalize_text(message)
+    tools = []
+    count_question = any(term in text for term in ["cuantos", "cuantas", "numero de", "número de", "total de", "hay "])
+    if count_question and "cliente" in text:
+        return [{"name": "count_customers", "arguments": {}}]
+    if count_question and "producto" in text and ("stock bajo" in text or "bajo stock" in text):
+        return [{"name": "count_low_stock_products", "arguments": {}}]
+    if count_question and "producto" in text:
+        return [{"name": "count_products", "arguments": {}}]
+    if count_question and ("albaran" in text or "albaranes" in text):
+        return [{"name": "count_delivery_notes", "arguments": {}}]
+    if "hay stock bajo" in text:
+        return [{"name": "count_low_stock_products", "arguments": {}}]
+    if any(word in text for word in ["preparar", "preparables", "prioriza", "priorizar", "pendientes"]):
+        tools.append({"name": "prioritize_delivery_notes", "arguments": {"limit": 12}})
+    if any(word in text for word in ["bloquea", "bloqueos", "bloqueado", "stock insuficiente"]):
+        tools.append({"name": "analyze_stock_blockers", "arguments": {"limit": 12}})
+    if "stock bajo" in text or "stock critic" in text or "reponer" in text:
+        tools.append({"name": "list_low_stock_products", "arguments": {"limit": 12}})
+    if any(word in text for word in ["ventas", "estadisticas", "estadísticas", "iva", "ranking"]):
+        tools.extend([
+            {"name": "get_sales_statistics", "arguments": {}},
+            {"name": "get_top_products", "arguments": {"limit": 10}},
+            {"name": "get_top_customers", "arguments": {"limit": 10}},
+        ])
+    if any(word in text for word in ["producto", "catalogo", "catálogo", "sku"]):
+        tools.append({"name": "list_products", "arguments": {"limit": 12}})
+    if any(word in text for word in ["albaran", "albarán", "albaranes"]):
+        tools.append({"name": "list_delivery_notes", "arguments": {"limit": 12}})
+    if any(word in text for word in ["resume", "resumen", "hoy", "operacion", "operación"]):
+        tools.insert(0, {"name": "summarize_daily_operations", "arguments": {}})
+    if not tools:
+        tools.append({"name": "get_operational_summary", "arguments": {}})
+
+    deduped = []
+    seen = set()
+    for tool in tools:
+        if tool["name"] not in seen and tool["name"] in TOOLS:
+            deduped.append(tool)
+            seen.add(tool["name"])
+    return deduped[:6]
+
+
+def plan_with_llm(client, message, page_context):
+    try:
+        response = client.chat(
+            [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"{PLAN_PROMPT}\nTools disponibles: {list(TOOLS.keys())}\nContexto: {page_context or {}}\nUsuario: {message}"},
+            ],
+            temperature=0,
+            max_tokens=300,
+        )
+        parsed = parse_json_object(response.content)
+        tools = parsed.get("tools") or []
+        valid = []
+        for item in tools:
+            name = item.get("name")
+            if name in TOOLS:
+                valid.append({"name": name, "arguments": item.get("arguments") or {}})
+        return valid[:6]
+    except Exception:
+        return []
+
+
+def suggested_actions_for(tool_results):
+    actions = []
+    statuses = {call["name"]: call for call in tool_results}
+    if "prioritize_delivery_notes" in statuses or "list_delivery_notes" in statuses:
+        actions.append({"type": "navigate", "label": "Ver albaranes", "target": "/albarans/"})
+    if "analyze_stock_blockers" in statuses:
+        actions.append({"type": "navigate", "label": "Ver preparacion", "target": "/preparacio/"})
+    if "list_low_stock_products" in statuses:
+        actions.append({"type": "navigate", "label": "Ver stock", "target": "/stock/"})
+    if "get_sales_statistics" in statuses:
+        actions.append({"type": "navigate", "label": "Ver estadisticas", "target": "/estadistiques/"})
+    safe = []
+    seen = set()
+    for action in actions:
+        if action["target"] in ALLOWED_ACTION_TARGETS and action["target"] not in seen:
+            safe.append(action)
+            seen.add(action["target"])
+    return safe
+
+
+def deterministic_answer(message, tool_outputs, evidence=None, suggested_actions=None):
+    return format_final_answer(message, tool_outputs, evidence=evidence or [], suggested_actions=suggested_actions or [])
+
+
+def final_with_llm(client, message, tool_outputs):
+    grounded = [compact_tool_result(item["result"]) | {"tool": item["name"]} for item in tool_outputs]
+    try:
+        response = client.chat(
+            [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"Pregunta: {message}\nResultados de tools JSON: {json.dumps(grounded, ensure_ascii=False)}\nResponde grounded y breve. No muestres JSON, nombres internos de tools ni claves tecnicas."},
+            ],
+            temperature=settings.AI_TEMPERATURE,
+            max_tokens=settings.AI_MAX_OUTPUT_TOKENS,
+        )
+        return response
+    except Exception:
+        return None
+
+
+class AuroraOperatorOrchestrator:
+    def __init__(self, force_mock=False):
+        self.force_mock = force_mock
+        self.client = get_llm_client(force_mock=force_mock)
+
+    @transaction.atomic
+    def run(self, user, message: str, conversation_id=None, page_context=None):
+        start = time.perf_counter()
+        safety = check_input_safety(message, settings.AGENT_MAX_MESSAGE_LENGTH)
+        conversation = self._get_or_create_conversation(user, message, conversation_id)
+        AgentMessage.objects.create(conversation=conversation, role=AgentMessage.Role.USER, content=message, metadata={"page_context": page_context or {}})
+        run = AgentRun.objects.create(
+            conversation=conversation,
+            user=user,
+            input_message=message,
+            provider=self.client.provider,
+            model=self.client.model,
+        )
+
+        if not safety.allowed:
+            payload = refusal_payload(safety.reason)
+            run.status = AgentRun.Status.BLOCKED
+            run.final_answer = payload["answer"]
+            run.latency_ms = self._elapsed(start)
+            run.save(update_fields=["status", "final_answer", "latency_ms"])
+            AgentMessage.objects.create(conversation=conversation, role=AgentMessage.Role.ASSISTANT, content=payload["answer"], metadata={"status": "blocked", "run_id": run.id, "tool_calls": []})
+            conversation.save(update_fields=["updated_at"])
+            return {**payload, "conversation_id": conversation.id, "run_id": run.id}
+
+        plan = [] if self.client.provider == "mock" else plan_with_llm(self.client, message, page_context)
+        if not plan:
+            plan = route_tools(message, page_context)
+
+        tool_outputs = []
+        for item in plan:
+            spec = get_tool(item["name"])
+            if not spec or not spec.read_only:
+                continue
+            tool_start = time.perf_counter()
+            try:
+                result = spec.handler(user, item.get("arguments") or {}, page_context or {})
+                status = result.get("status", "ok")
+                error = "" if status != "error" else result.get("message", "")
+            except Exception as exc:
+                result = {"status": "error", "summary": {}, "records": [], "evidence": [], "message": str(exc)}
+                status = "error"
+                error = str(exc)
+            call = AgentToolCall.objects.create(
+                run=run,
+                conversation=conversation,
+                tool_name=spec.name,
+                arguments=item.get("arguments") or {},
+                result=compact_tool_result(result, record_limit=settings.AGENT_MAX_TOOL_RESULTS),
+                status=status,
+                latency_ms=self._elapsed(tool_start),
+                error_message=error,
+            )
+            AgentMessage.objects.create(conversation=conversation, role=AgentMessage.Role.TOOL, content=spec.name, metadata={"tool_call_id": call.id, "result": call.result})
+            tool_outputs.append({"name": spec.name, "status": status, "result": result})
+
+        evidence = []
+        for output in tool_outputs:
+            evidence.extend(output["result"].get("evidence", []))
+        actions = suggested_actions_for(tool_outputs)
+        llm_response = None if self.client.provider == "mock" else final_with_llm(self.client, message, tool_outputs)
+        answer = llm_response.content if llm_response and llm_response.content else deterministic_answer(message, tool_outputs, evidence, actions)
+
+        run.status = AgentRun.Status.OK
+        run.final_answer = answer
+        run.latency_ms = self._elapsed(start)
+        if llm_response:
+            run.prompt_tokens = llm_response.prompt_tokens
+            run.completion_tokens = llm_response.completion_tokens
+            run.total_tokens = llm_response.total_tokens
+        run.save()
+        tool_calls = [{"name": output["name"], "status": output["status"]} for output in tool_outputs]
+        AgentMessage.objects.create(
+            conversation=conversation,
+            role=AgentMessage.Role.ASSISTANT,
+            content=answer,
+            metadata={"evidence": evidence[:20], "suggested_actions": actions, "tool_calls": tool_calls, "run_id": run.id, "status": "ok"},
+        )
+        conversation.save(update_fields=["updated_at"])
+        return {
+            "conversation_id": conversation.id,
+            "run_id": run.id,
+            "answer": answer,
+            "evidence": evidence[:20],
+            "suggested_actions": actions,
+            "tool_calls": tool_calls,
+            "status": "ok",
+        }
+
+    def _get_or_create_conversation(self, user, message, conversation_id=None):
+        if conversation_id:
+            existing = AgentConversation.objects.filter(id=conversation_id, user=user).first()
+            if existing:
+                return existing
+        title = (message or "Consulta operativa").strip().splitlines()[0][:150]
+        return AgentConversation.objects.create(user=user, title=title or "Consulta operativa")
+
+    @staticmethod
+    def _elapsed(start):
+        return int((time.perf_counter() - start) * 1000)

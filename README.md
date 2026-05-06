@@ -33,6 +33,7 @@ From a technical perspective, the project focuses on business logic inside Djang
 - Stock replenishment through forms.
 - Sales statistics.
 - Aurora Ops React UI with dashboard, semantic badges, sparklines, empty states and command palette.
+- Aurora Operator read-only agent with API, CLI, traceability, mock mode and OpenAI-compatible provider support.
 
 ---
 
@@ -103,3 +104,29 @@ The application will be available at:
 `http://127.0.0.1:8000/`
 
 The Django app serves compiled frontend assets from `frontend/dist`, so run `npm run build` after frontend changes.
+
+---
+
+# Aurora Operator
+
+Aurora Operator is the read-only operational agent integrated into `/consulta/`.
+
+Quick mock test:
+
+```powershell
+python manage.py migrate
+python manage.py agent_smoke_test --mock "Que albaranes puedo preparar hoy?"
+python manage.py agent_eval --dataset aurora_agent/evals/smoke.json --mock
+```
+
+To use a real OpenAI-compatible provider, copy `.env.example` to `.env`, set:
+
+```text
+AI_PROVIDER=openai_compatible
+AI_API_KEY=your_api_key_here
+AI_BASE_URL=https://api.groq.com/openai/v1
+AI_MODEL=llama-3.3-70b-versatile
+AGENT_ENABLE_REAL_LLM=true
+```
+
+Full documentation: `docs/agent.md`.

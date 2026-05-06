@@ -14,7 +14,6 @@ ENV/
 # Archivos de entorno
 
 .env
-.env.*
 
 # Base de datos local (SQLite)
 

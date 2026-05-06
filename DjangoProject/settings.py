@@ -10,22 +10,58 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def load_dotenv(path):
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ[key.strip()] = value.strip().strip('"').strip("'")
+
+
+load_dotenv(BASE_DIR / ".env")
+
+
+def env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_int(name, default):
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def env_float(name, default):
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-$y9wq+e1_x6m%56n8&s(-0(v+i1iyen5t79a$@2!yvlmq)b$1z'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-$y9wq+e1_x6m%56n8&s(-0(v+i1iyen5t79a$@2!yvlmq)b$1z')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool("DEBUG", True)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [host.strip() for host in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if host.strip()]
 
 
 # Application definition
@@ -38,6 +74,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'albaranes',
+    'aurora_agent',
 ]
 
 MIDDLEWARE = [
@@ -120,6 +157,22 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'frontend' / 'dist',
 ]
+
+# Aurora Operator agent configuration. Mock mode is the safe default so the app
+# starts without secrets and CI can run without external network access.
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "mock")
+AI_API_KEY = os.environ.get("AI_API_KEY", "")
+AI_BASE_URL = os.environ.get("AI_BASE_URL", "https://api.openai.com/v1")
+AI_MODEL = os.environ.get("AI_MODEL", "gpt-4o-mini")
+AI_TIMEOUT_SECONDS = env_int("AI_TIMEOUT_SECONDS", 30)
+AI_MAX_OUTPUT_TOKENS = env_int("AI_MAX_OUTPUT_TOKENS", 800)
+AI_TEMPERATURE = env_float("AI_TEMPERATURE", 0.2)
+AGENT_MAX_TOOL_RESULTS = env_int("AGENT_MAX_TOOL_RESULTS", 20)
+AGENT_MAX_MESSAGE_LENGTH = env_int("AGENT_MAX_MESSAGE_LENGTH", 2000)
+AGENT_ENABLE_REAL_LLM = env_bool(
+    "AGENT_ENABLE_REAL_LLM",
+    default=bool(AI_API_KEY and AI_PROVIDER != "mock"),
+)
 
 # Authentication settings
 LOGIN_URL = 'login'

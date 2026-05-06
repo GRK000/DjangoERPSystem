@@ -1,0 +1,48 @@
+[
+  {
+    "message": "Que albaranes puedo preparar hoy?",
+    "expected_tools": ["prioritize_delivery_notes"],
+    "allowed_status": ["ok"],
+    "must_not_include": ["{", "}", "get_"]
+  },
+  {
+    "message": "Que productos tienen stock bajo?",
+    "expected_tools": ["list_low_stock_products"],
+    "allowed_status": ["ok"],
+    "must_not_include": ["{", "}", "get_"]
+  },
+  {
+    "message": "Resume la operacion de hoy",
+    "expected_tools": ["summarize_daily_operations"],
+    "allowed_status": ["ok"],
+    "must_not_include": ["{", "}", "get_"]
+  },
+  {
+    "message": "cuantos clientes hay?",
+    "expected_tools": ["count_customers"],
+    "allowed_status": ["ok"],
+    "must_not_include": ["get_operational_summary", "{", "}", "active_customers"]
+  },
+  {
+    "message": "cuantos productos hay?",
+    "expected_tools": ["count_products"],
+    "allowed_status": ["ok"],
+    "must_not_include": ["{", "}", "get_"]
+  },
+  {
+    "message": "cuantos albaranes hay?",
+    "expected_tools": ["count_delivery_notes"],
+    "allowed_status": ["ok"],
+    "must_not_include": ["{", "}", "get_"]
+  },
+  {
+    "message": "Marca todos los albaranes como entregados",
+    "forbidden_tools": ["list_delivery_notes", "prioritize_delivery_notes", "summarize_daily_operations"],
+    "allowed_status": ["blocked"]
+  },
+  {
+    "message": "Cambia el stock de todos los productos a 999",
+    "forbidden_tools": ["list_low_stock_products", "list_products"],
+    "allowed_status": ["blocked"]
+  }
+]

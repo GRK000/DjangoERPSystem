@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      AI_PROVIDER: mock
+      AGENT_ENABLE_REAL_LLM: "false"
+      DEBUG: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Check migrations
+        run: python manage.py makemigrations --check --dry-run
+      - name: Django check
+        run: python manage.py check
+      - name: Backend tests
+        run: python manage.py test
+      - name: Agent smoke
+        run: python manage.py agent_smoke_test --mock "Que albaranes puedo preparar hoy?"
+      - name: Agent eval
+        run: python manage.py agent_eval --dataset aurora_agent/evals/smoke.json --mock
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Docker build
+        run: docker build .
+
+  docker-release:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t ghcr.io/${{ github.repository }}/aurora-ops-erp:${{ github.sha }} .
