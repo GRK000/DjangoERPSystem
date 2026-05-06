@@ -1,0 +1,15 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurora Ops ERP</title>
+    <link rel="stylesheet" href="{% static 'assets/index.css' %}">
+</head>
+<body>
+    <div id="root"></div>
+    {{ initial_data|json_script:"erp-initial-data" }}
+    <script type="module" src="{% static 'assets/index.js' %}"></script>
+</body>
+</html>

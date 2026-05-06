@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ca">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aurora Ops ERP</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script id="erp-initial-data" type="application/json">
+      {
+        "page": "home",
+        "payload": {
+          "stats": {
+            "total_clients": 128,
+            "total_albarans": 342,
+            "total_productes": 916,
+            "albarans_pendents": 24,
+            "vendes_entregades": 182450
+          },
+          "status_counts": {
+            "PENDENT": 24,
+            "EN_PREPARACIO": 16,
+            "PREPARAT": 8,
+            "ENVIAT": 12,
+            "ENTREGAT": 282
+          },
+          "recent_albarans": [],
+          "stock_alerts": []
+        },
+        "csrfToken": "dev",
+        "user": { "isAuthenticated": true, "username": "operador", "isStaff": true },
+        "messages": [],
+        "commandItems": []
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
