@@ -54,6 +54,15 @@ button {
   cursor: pointer;
 }
 
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 img {
   max-width: 100%;
   display: block;
@@ -199,6 +208,33 @@ img {
   align-items: center;
 }
 
+.density-toggle {
+  min-height: 40px;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 3px;
+  border: 1px solid rgba(39, 50, 74, 0.9);
+  border-radius: var(--radius);
+  background: rgba(8, 10, 18, 0.64);
+}
+
+.density-toggle button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.density-toggle button.active {
+  color: #050713;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.96), rgba(132, 204, 22, 0.9));
+  box-shadow: 0 8px 18px rgba(34, 211, 238, 0.14);
+}
+
 .command-trigger,
 .user-chip,
 .btn {
@@ -310,7 +346,7 @@ img {
 
 .ops-hero {
   grid-column: span 3;
-  min-height: 310px;
+  min-height: clamp(320px, 36vh, 420px);
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
   gap: 22px;
@@ -340,8 +376,8 @@ img {
 .hero-copy h2 {
   margin: 0;
   max-width: 760px;
-  font-size: clamp(34px, 5vw, 68px);
-  line-height: 0.96;
+  font-size: clamp(30px, 4.3vw, 56px);
+  line-height: 1;
 }
 
 .hero-copy p:not(.eyebrow) {
@@ -401,6 +437,84 @@ img {
 .panel {
   padding: 18px;
   min-width: 0;
+}
+
+.page-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid rgba(39, 50, 74, 0.86);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(22, 28, 46, 0.74), rgba(16, 21, 34, 0.86));
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.page-header h2 {
+  margin: 0;
+  font-size: clamp(22px, 2vw, 32px);
+  line-height: 1.08;
+}
+
+.page-header p:not(.eyebrow) {
+  max-width: 680px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.page-header-operator {
+  align-items: center;
+  padding: 14px 16px;
+}
+
+.page-header-operator h2 {
+  font-size: clamp(20px, 1.7vw, 26px);
+}
+
+.page-header-aside,
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.operator-summary,
+.filter-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.operator-summary span,
+.filter-strip span {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: rgba(8, 10, 18, 0.34);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.operator-summary strong,
+.filter-strip strong {
+  color: var(--text);
+}
+
+.summary-risk {
+  color: var(--amber) !important;
+  border-color: rgba(245, 158, 11, 0.36) !important;
+  background: rgba(245, 158, 11, 0.08) !important;
 }
 
 .panel-head {
@@ -554,9 +668,13 @@ td {
 }
 
 th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   color: var(--muted);
   font-size: 11px;
   text-transform: uppercase;
+  background: rgba(16, 21, 34, 0.98);
 }
 
 td {
@@ -586,6 +704,24 @@ tbody tr:hover {
 
 .table-actions {
   width: 42px;
+}
+
+.row-action {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--cyan);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.cell-subtext {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .alert-list,
@@ -883,6 +1019,14 @@ tbody tr:hover {
   background: rgba(8, 10, 18, 0.32);
 }
 
+.prep-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .prep-head {
   display: flex;
   align-items: flex-start;
@@ -924,6 +1068,42 @@ tbody tr:hover {
 .filter-form {
   display: grid;
   gap: 12px;
+}
+
+.operator-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.prep-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.stats-layout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stats-layout-operator .page-header {
+  margin-bottom: 0;
+}
+
+.prep-table-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.prep-table-actions form {
+  margin: 0;
+}
+
+.row-action-primary {
+  color: #050713;
+  border-color: rgba(132, 204, 22, 0.5);
+  background: var(--lime);
 }
 
 .risk-row td {
@@ -1140,6 +1320,296 @@ tbody tr:hover {
   font-size: 12px;
 }
 
+html[data-density="operator"] .workspace {
+  padding: 16px clamp(14px, 2vw, 24px) 28px;
+}
+
+html[data-density="operator"] .topbar {
+  margin-bottom: 14px;
+}
+
+html[data-density="operator"] .topbar h1 {
+  font-size: clamp(22px, 2.2vw, 32px);
+}
+
+html[data-density="operator"] .sidebar {
+  padding: 16px;
+  gap: 14px;
+}
+
+html[data-density="operator"] .brand {
+  padding: 6px 6px 12px;
+}
+
+html[data-density="operator"] .brand-mark {
+  width: 38px;
+  height: 38px;
+}
+
+html[data-density="operator"] .nav-stack a,
+html[data-density="operator"] .admin-link {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+html[data-density="operator"] .sidebar-card {
+  padding: 12px;
+}
+
+html[data-density="operator"] .dashboard-grid,
+html[data-density="operator"] .detail-grid,
+html[data-density="operator"] .catalog-layout,
+html[data-density="operator"] .stock-layout,
+html[data-density="operator"] .stats-layout {
+  gap: 10px;
+}
+
+html[data-density="operator"] .panel {
+  padding: 10px;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.3);
+}
+
+html[data-density="operator"] .panel-head {
+  margin-bottom: 10px;
+}
+
+html[data-density="operator"] .panel h2 {
+  font-size: 17px;
+}
+
+html[data-density="operator"] .kpi-card {
+  min-height: 96px;
+  padding: 10px;
+}
+
+html[data-density="operator"] .kpi-card strong {
+  font-size: clamp(20px, 1.9vw, 27px);
+}
+
+html[data-density="operator"] .kpi-card p {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+
+html[data-density="operator"] .kpi-card small {
+  font-size: 11px;
+}
+
+html[data-density="operator"] .kpi-top > span {
+  width: 32px;
+  height: 32px;
+}
+
+html[data-density="operator"] .sparkline {
+  width: 82px;
+  height: 30px;
+}
+
+html[data-density="operator"] th,
+html[data-density="operator"] td {
+  padding: 7px 9px;
+}
+
+html[data-density="operator"] td {
+  font-size: 13px;
+}
+
+html[data-density="operator"] tbody tr {
+  min-height: 38px;
+}
+
+html[data-density="operator"] .badge {
+  min-height: 20px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+html[data-density="operator"] .btn,
+html[data-density="operator"] .command-trigger,
+html[data-density="operator"] .user-chip {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+html[data-density="operator"] .command-trigger {
+  min-width: min(300px, 30vw);
+}
+
+html[data-density="operator"] .status-board {
+  gap: 8px;
+}
+
+html[data-density="operator"] .status-cell {
+  padding: 10px;
+}
+
+html[data-density="operator"] .status-cell strong {
+  margin-top: 8px;
+  font-size: 22px;
+}
+
+html[data-density="operator"] .empty-state {
+  min-height: 0;
+  padding: 10px 12px;
+  text-align: left;
+  border-style: solid;
+}
+
+html[data-density="operator"] .empty-state h3 {
+  margin: 0 0 2px;
+}
+
+html[data-density="operator"] .empty-state p {
+  margin: 0;
+}
+
+html[data-density="operator"] .empty-orbit {
+  width: 34px;
+  height: 34px;
+}
+
+html[data-density="operator"] .product-card {
+  padding: 10px;
+}
+
+html[data-density="operator"] .product-image {
+  display: none;
+}
+
+html[data-density="operator"] .alert-list,
+html[data-density="operator"] .rank-list,
+html[data-density="operator"] .bar-list,
+html[data-density="operator"] .metric-list,
+html[data-density="operator"] .category-list,
+html[data-density="operator"] .prep-list {
+  gap: 7px;
+}
+
+html[data-density="operator"] .alert-list a,
+html[data-density="operator"] .rank-list div,
+html[data-density="operator"] .metric-list span,
+html[data-density="operator"] .category-list a,
+html[data-density="operator"] .bar-list div {
+  padding: 8px;
+}
+
+html[data-density="operator"] .filter-form {
+  gap: 9px;
+}
+
+html[data-density="operator"] .field input,
+html[data-density="operator"] .field select,
+html[data-density="operator"] .field textarea,
+html[data-density="operator"] .lookup-form input,
+html[data-density="operator"] .filter-form select,
+html[data-density="operator"] .inline-form select {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+html[data-density="operator"] .prep-card {
+  padding: 11px;
+}
+
+html[data-density="operator"] .prep-head h3,
+html[data-density="operator"] .prep-head p {
+  margin-top: 5px;
+}
+
+html[data-density="operator"] .line-chips {
+  margin: 10px 0;
+  gap: 6px;
+}
+
+html[data-density="operator"] .line-chips span {
+  padding: 5px 7px;
+}
+
+html[data-density="operator"] .empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+html[data-density="operator"] .empty-state p {
+  flex: 1 1 260px;
+  max-width: none;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+html[data-density="operator"] .empty-state p strong {
+  color: var(--text);
+}
+
+html[data-density="operator"] .empty-state .btn {
+  min-height: 30px;
+}
+
+html[data-density="operator"] .stats-layout-operator .panel,
+html[data-density="operator"] .prep-console .panel,
+html[data-density="operator"] .operator-stack .panel {
+  min-height: 0;
+}
+
+html[data-density="operator"] .stats-layout-operator .rank-list div {
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  min-height: 36px;
+  border-radius: 6px;
+}
+
+html[data-density="operator"] .stats-layout-operator .rank-list span {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+
+html[data-density="operator"] .stats-layout-operator .bar-list div {
+  min-height: 36px;
+  align-items: center;
+}
+
+html[data-density="operator"] .page-header-operator {
+  padding: 10px 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+html[data-density="operator"] .page-header-operator h2 {
+  font-size: clamp(19px, 1.5vw, 24px);
+}
+
+html[data-density="operator"] .page-header-operator p:not(.eyebrow) {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+html[data-density="operator"] .operator-summary span,
+html[data-density="operator"] .filter-strip span {
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+html[data-density="operator"] .filter-form {
+  position: sticky;
+  top: 8px;
+}
+
+html[data-density="operator"] .prep-table-actions .row-action {
+  width: 28px;
+  height: 28px;
+}
+
+html[data-density="operator"] .risk-row td {
+  background: rgba(251, 113, 133, 0.07);
+}
+
+html[data-density="operator"] .risk-row:hover td {
+  background: rgba(251, 113, 133, 0.1);
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1160,14 +1630,27 @@ tbody tr:hover {
   .detail-grid,
   .catalog-layout,
   .stock-layout,
+  .stats-layout,
   .ops-hero,
+  .page-header,
   .auth-frame {
     grid-template-columns: 1fr;
   }
 
   .span-2,
+  .page-header,
   .ops-hero {
     grid-column: span 1;
+  }
+
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .page-header-aside,
+  .page-header-actions {
+    justify-content: flex-start;
   }
 
   .signal-tower {
@@ -1196,10 +1679,12 @@ tbody tr:hover {
 
   .topbar-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .command-trigger,
-  .user-chip {
+  .user-chip,
+  .density-toggle {
     flex: 1;
   }
 

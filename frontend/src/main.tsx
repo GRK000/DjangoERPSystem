@@ -1,4 +1,4 @@
-import React, { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import React, { createContext, FormEvent, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
@@ -66,6 +66,49 @@ type InitialData = {
   messages: FlashMessage[];
   commandItems: CommandItem[];
 };
+
+type DensityMode = "command" | "operator";
+
+const densityStorageKey = "aurora-density-mode";
+const DensityContext = createContext<{
+  density: DensityMode;
+  setDensity: (density: DensityMode) => void;
+}>({
+  density: "command",
+  setDensity: () => undefined,
+});
+
+function readStoredDensity(): DensityMode {
+  try {
+    const stored = window.localStorage.getItem(densityStorageKey);
+    return stored === "operator" || stored === "command" ? stored : "command";
+  } catch {
+    return "command";
+  }
+}
+
+function DensityProvider({ children }: { children: ReactNode }) {
+  const [density, setDensityState] = useState<DensityMode>(readStoredDensity);
+
+  const setDensity = (nextDensity: DensityMode) => {
+    setDensityState(nextDensity);
+    try {
+      window.localStorage.setItem(densityStorageKey, nextDensity);
+    } catch {
+      // Storage can be unavailable in restricted browser contexts.
+    }
+  };
+
+  useEffect(() => {
+    document.documentElement.dataset.density = density;
+  }, [density]);
+
+  return <DensityContext.Provider value={{ density, setDensity }}>{children}</DensityContext.Provider>;
+}
+
+function useDensity() {
+  return useContext(DensityContext);
+}
 
 type Client = {
   id: number;
@@ -202,6 +245,13 @@ function formatDate(value?: string | null, withTime = false) {
   }).format(new Date(value));
 }
 
+function stockTone(quantity: number | string | null | undefined, isLow?: boolean) {
+  const amount = Number(quantity || 0);
+  if (amount <= 0) return { tone: "danger", label: "Critico" };
+  if (isLow) return { tone: "warning", label: "Bajo" };
+  return { tone: "success", label: "Sano" };
+}
+
 function initials(label: string) {
   return label
     .split(" ")
@@ -283,6 +333,17 @@ function EmptyState({
   text: string;
   action?: ReactNode;
 }) {
+  const { density } = useDensity();
+  if (density === "operator") {
+    return (
+      <div className="empty-state empty-state-compact">
+        <div className="empty-orbit">{icon}</div>
+        <p><strong>{title}</strong> · {text}</p>
+        {action}
+      </div>
+    );
+  }
+
   return (
     <div className="empty-state">
       <div className="empty-orbit">{icon}</div>
@@ -298,6 +359,62 @@ function ActionLink({ href, children, variant = "primary" }: { href: string; chi
     <a className={`btn btn-${variant}`} href={href}>
       {children}
     </a>
+  );
+}
+
+function DensityToggle() {
+  const { density, setDensity } = useDensity();
+  return (
+    <div className="density-toggle" role="group" aria-label="Modo visual">
+      <button
+        type="button"
+        aria-pressed={density === "command"}
+        className={density === "command" ? "active" : ""}
+        onClick={() => setDensity("command")}
+      >
+        Comando
+      </button>
+      <button
+        type="button"
+        aria-pressed={density === "operator"}
+        className={density === "operator" ? "active" : ""}
+        onClick={() => setDensity("operator")}
+      >
+        Operador
+      </button>
+    </div>
+  );
+}
+
+function PageHeader({
+  variant = "compact",
+  eyebrow,
+  title,
+  description,
+  actions,
+  meta,
+}: {
+  variant?: "command" | "compact" | "operator";
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  meta?: ReactNode;
+}) {
+  return (
+    <section className={`page-header page-header-${variant}`}>
+      <div>
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+        <h2>{title}</h2>
+        {description && <p>{description}</p>}
+      </div>
+      {(meta || actions) && (
+        <div className="page-header-aside">
+          {meta}
+          {actions && <div className="page-header-actions">{actions}</div>}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -387,6 +504,7 @@ function SelectField({
 function Shell({ data }: { data: InitialData }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const pageTitle = pageTitles[data.page] || "Operacions";
+  const { density } = useDensity();
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -403,7 +521,7 @@ function Shell({ data }: { data: InitialData }) {
   }, []);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell app-shell-${density}`}>
       <Sidebar user={data.user} />
       <div className="workspace">
         <header className="topbar">
@@ -412,6 +530,7 @@ function Shell({ data }: { data: InitialData }) {
             <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
+            <DensityToggle />
             <button className="command-trigger" type="button" onClick={() => setPaletteOpen(true)}>
               <Search size={16} />
               <span>Buscar entidad o modulo</span>
@@ -501,8 +620,8 @@ function Sidebar({ user }: { user: AppUser }) {
       </nav>
       <div className="sidebar-card">
         <div className="pulse-dot" />
-        <p>IA contextual</p>
-        <strong>Priorizacion operativa activa</strong>
+        <p>Senales operativas</p>
+        <strong>Priorizacion activa</strong>
       </div>
       {user.isStaff && (
         <a className="admin-link" href="/admin/">
@@ -641,39 +760,67 @@ function HomePage({ payload, user }: { payload: Record<string, any>; csrfToken: 
   const stockAlerts = (payload.stock_alerts || []) as Stock[];
   const statusCounts = payload.status_counts || {};
   const pending = Number(stats.albarans_pendents || 0);
+  const { density } = useDensity();
 
   return (
     <div className="dashboard-grid">
-      <section className="ops-hero">
-        <div className="hero-copy">
-          <p className="eyebrow">Centro de mando logistico</p>
-          <h2>Operacion preparada para decidir, priorizar y ejecutar.</h2>
-          <p>
-            Vision consolidada de albaranes, stock critico y rendimiento comercial con senales
-            de accion visibles desde el primer segundo.
-          </p>
-          <div className="hero-actions">
-            {user.isAuthenticated ? (
+      {density === "command" ? (
+        <section className="ops-hero">
+          <div className="hero-copy">
+            <p className="eyebrow">Centro de mando logistico</p>
+            <h2>Operacion preparada para decidir, priorizar y ejecutar.</h2>
+            <p>
+              Vision consolidada de albaranes, stock critico y rendimiento comercial con senales
+              de accion visibles desde el primer segundo.
+            </p>
+            <div className="hero-actions">
+              {user.isAuthenticated ? (
+                <>
+                  <ActionLink href="/albarans/nova/"><Plus size={16} /> Nuevo albaran</ActionLink>
+                  <ActionLink href="/preparacio/" variant="ghost"><ClipboardCheck size={16} /> Preparacion</ActionLink>
+                </>
+              ) : (
+                <>
+                  <ActionLink href="/login/"><LogIn size={16} /> Entrar</ActionLink>
+                  <ActionLink href="/register/" variant="ghost"><UserPlus size={16} /> Crear cuenta</ActionLink>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="signal-tower">
+            <div className="signal-ring" />
+            <div className="signal-core">
+              <Sparkles size={24} />
+              <span>Routing</span>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <PageHeader
+          variant="operator"
+          eyebrow="Centro de mando logistico"
+          title="Resumen operativo"
+          description="Prioridades visibles para preparar, entregar y reponer sin perder contexto."
+          actions={
+            user.isAuthenticated ? (
               <>
                 <ActionLink href="/albarans/nova/"><Plus size={16} /> Nuevo albaran</ActionLink>
                 <ActionLink href="/preparacio/" variant="ghost"><ClipboardCheck size={16} /> Preparacion</ActionLink>
               </>
             ) : (
-              <>
-                <ActionLink href="/login/"><LogIn size={16} /> Entrar</ActionLink>
-                <ActionLink href="/register/" variant="ghost"><UserPlus size={16} /> Crear cuenta</ActionLink>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="signal-tower">
-          <div className="signal-ring" />
-          <div className="signal-core">
-            <Sparkles size={24} />
-            <span>AI routing</span>
-          </div>
-        </div>
-      </section>
+              <ActionLink href="/login/"><LogIn size={16} /> Entrar</ActionLink>
+            )
+          }
+          meta={
+            <div className="operator-summary">
+              <span><strong>{formatNumber(pending)}</strong> pendientes</span>
+              <span><strong>{formatNumber(stockAlerts.length)}</strong> stock critico</span>
+              <span><strong>{formatNumber(stats.total_productes)}</strong> productos</span>
+              <span><strong>{formatNumber(stats.total_clients)}</strong> clientes</span>
+            </div>
+          }
+        />
+      )}
 
       <KpiCard label="Clientes activos" value={formatNumber(stats.total_clients)} icon={<Users size={20} />} tone="cyan" hint="Cartera comercial disponible" spark={[8, 12, 11, 18, 22, 26, 29]} />
       <KpiCard label="Albaranes totales" value={formatNumber(stats.total_albarans)} icon={<FileText size={20} />} tone="violet" hint={`${pending} pendientes`} spark={[12, 15, 14, 21, 28, 24, 32]} />
@@ -824,9 +971,25 @@ function CatalogPage({ payload }: { payload: Record<string, any>; csrfToken: str
   const categories = (payload.categories || []) as Category[];
   const products = (payload.productes || []) as Product[];
   const current = payload.categoria_actual as Category | null;
+  const { density } = useDensity();
   return (
-    <div className="catalog-layout">
-      <Panel title="Categorias" eyebrow="Filtro">
+    <div className={`catalog-layout ${density === "operator" ? "operator-stack" : ""}`}>
+      {density === "operator" && (
+        <PageHeader
+          variant="operator"
+          eyebrow={`${products.length} referencias`}
+          title="Inventario de catalogo"
+          description="Productos activos por SKU, categoria, stock y precio."
+          meta={
+            <div className="operator-summary">
+              <span><strong>{formatNumber(categories.length)}</strong> categorias</span>
+              <span><strong>{formatNumber(products.filter((product) => Number(product.stock_total || 0) <= 0).length)}</strong> sin stock</span>
+              <span><strong>{current?.nom || "Todas"}</strong> filtro</span>
+            </div>
+          }
+        />
+      )}
+      <Panel title="Categorias" eyebrow={density === "operator" ? "Filtros" : "Filtro"}>
         <div className="category-list">
           <a className={!current ? "active" : ""} href="/cataleg/">Todas</a>
           {categories.map((category) => (
@@ -838,24 +1001,28 @@ function CatalogPage({ payload }: { payload: Record<string, any>; csrfToken: str
       </Panel>
       <Panel title={current ? current.nom : "Catalogo activo"} eyebrow={`${products.length} referencias`} className="span-2">
         {products.length ? (
-          <div className="product-grid">
-            {products.map((product) => (
-              <article key={product.id} className="product-card">
-                <div className="product-image">
-                  {product.imatge_url ? <img src={product.imatge_url} alt="" /> : <Package size={30} />}
-                </div>
-                <div>
-                  <Badge tone={product.es_perible ? "warning" : "neutral"}>{product.categoria.nom}</Badge>
-                  <h3>{product.nom}</h3>
-                  <p>{product.descripcio || `${product.unitat_mesura} - IVA ${Math.round(product.iva * 100)}%`}</p>
-                </div>
-                <div className="product-meta">
-                  <strong>{formatMoney(product.preu_unitari)}</strong>
-                  <span>{formatNumber(product.stock_total || 0)} uds</span>
-                </div>
-              </article>
-            ))}
-          </div>
+          density === "operator" ? (
+            <ProductInventoryTable products={products} />
+          ) : (
+            <div className="product-grid">
+              {products.map((product) => (
+                <article key={product.id} className="product-card">
+                  <div className="product-image">
+                    {product.imatge_url ? <img src={product.imatge_url} alt="" /> : <Package size={30} />}
+                  </div>
+                  <div>
+                    <Badge tone={product.es_perible ? "warning" : "neutral"}>{product.categoria.nom}</Badge>
+                    <h3>{product.nom}</h3>
+                    <p>{product.descripcio || `${product.unitat_mesura} - IVA ${Math.round(product.iva * 100)}%`}</p>
+                  </div>
+                  <div className="product-meta">
+                    <strong>{formatMoney(product.preu_unitari)}</strong>
+                    <span>{formatNumber(product.stock_total || 0)} uds</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )
         ) : (
           <EmptyState icon={<Package size={28} />} title="Catalogo sin referencias" text="No hay productos activos para este filtro." />
         )}
@@ -866,14 +1033,39 @@ function CatalogPage({ payload }: { payload: Record<string, any>; csrfToken: str
 
 function AlbaransList({ payload }: { payload: Record<string, any>; csrfToken: string; user: AppUser }) {
   const albarans = (payload.albarans || []) as Albara[];
+  const { density } = useDensity();
+  const statusSummary = Object.entries(statusMeta).map(([status, meta]) => ({
+    ...meta,
+    count: albarans.filter((albara) => albara.estat === status).length,
+  }));
   return (
-    <Panel title="Albaranes" eyebrow={`${albarans.length} documentos`} action={<ActionLink href="/albarans/nova/"><Plus size={16} /> Nuevo albaran</ActionLink>}>
-      {albarans.length ? <AlbaraTable albarans={albarans} /> : <EmptyState icon={<FileText size={28} />} title="No hay albaranes todavia" text="Crea un albaran para activar el flujo de preparacion y stock." action={<ActionLink href="/albarans/nova/"><Plus size={16} /> Crear albaran</ActionLink>} />}
-    </Panel>
+    <div className="operator-stack">
+      {density === "operator" && (
+        <PageHeader
+          variant="operator"
+          eyebrow={`${albarans.length} documentos`}
+          title="Mesa de albaranes"
+          description="Seguimiento denso de estados, cliente, almacen y total."
+          actions={<ActionLink href="/albarans/nova/"><Plus size={16} /> Nuevo albaran</ActionLink>}
+          meta={
+            <div className="filter-strip">
+              {statusSummary.map((item) => (
+                <span key={item.label}><Badge tone={item.tone}>{item.label}</Badge><strong>{item.count}</strong></span>
+              ))}
+            </div>
+          }
+        />
+      )}
+      <Panel title={density === "operator" ? "Listado operativo" : "Albaranes"} eyebrow={`${albarans.length} documentos`} action={density === "command" ? <ActionLink href="/albarans/nova/"><Plus size={16} /> Nuevo albaran</ActionLink> : null}>
+        {albarans.length ? <AlbaraTable albarans={albarans} /> : <EmptyState icon={<FileText size={28} />} title="No hay albaranes todavia" text="Crea un albaran para activar el flujo de preparacion y stock." action={<ActionLink href="/albarans/nova/"><Plus size={16} /> Crear albaran</ActionLink>} />}
+      </Panel>
+    </div>
   );
 }
 
 function AlbaraTable({ albarans, compact = false }: { albarans: Albara[]; compact?: boolean }) {
+  const { density } = useDensity();
+  const showAction = !compact || density === "operator";
   return (
     <div className="table-wrap">
       <table>
@@ -884,7 +1076,9 @@ function AlbaraTable({ albarans, compact = false }: { albarans: Albara[]; compac
             {!compact && <th>Magatzem</th>}
             <th>Fecha</th>
             <th>Estado</th>
+            {density === "operator" && <th>Prep.</th>}
             <th className="right">Total</th>
+            {showAction && <th />}
           </tr>
         </thead>
         <tbody>
@@ -895,9 +1089,52 @@ function AlbaraTable({ albarans, compact = false }: { albarans: Albara[]; compac
               {!compact && <td>{albara.magatzem?.nom || "-"}</td>}
               <td>{formatDate(albara.data_creacio, true)}</td>
               <td><StatusBadge status={albara.estat} /></td>
+              {density === "operator" && (
+                <td>
+                  {albara.linies?.some((line) => line.stock_baix) ? <Badge tone="danger">Stock</Badge> : <Badge tone="success">OK</Badge>}
+                </td>
+              )}
               <td className="right"><strong>{formatMoney(albara.total)}</strong></td>
+              {showAction && <td className="table-actions"><a className="row-action" href={`/albarans/${albara.id}/`} aria-label={`Ver albaran ${albara.numero_albara}`}><Eye size={15} /></a></td>}
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ProductInventoryTable({ products }: { products: Product[] }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Producto</th>
+            <th>Categoria</th>
+            <th className="right">Stock</th>
+            <th>Estado</th>
+            <th className="right">Precio</th>
+          </tr>
+        </thead>
+        <tbody>
+          {products.map((product) => {
+            const meta = stockTone(product.stock_total);
+            return (
+              <tr key={product.id}>
+                <td><Badge tone="neutral">{product.codi}</Badge></td>
+                <td>
+                  <strong>{product.nom}</strong>
+                  <small className="cell-subtext">{product.unitat_mesura} - IVA {Math.round(product.iva * 100)}%</small>
+                </td>
+                <td>{product.categoria.nom}</td>
+                <td className="right"><strong>{formatNumber(product.stock_total || 0)}</strong></td>
+                <td><Badge tone={meta.tone}>{meta.label}</Badge></td>
+                <td className="right">{formatMoney(product.preu_unitari)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -1082,35 +1319,64 @@ function ConsultaResult({ payload }: { payload: Record<string, any>; csrfToken: 
 function PreparacioPage({ payload, csrfToken }: { payload: Record<string, any>; csrfToken: string; user: AppUser }) {
   const albarans = (payload.albarans || []) as Albara[];
   const empleat = payload.empleat;
+  const blocked = albarans.filter((albara) => albara.linies?.some((line) => line.stock_baix)).length;
+  const lineCount = albarans.reduce((total, albara) => total + (albara.linies?.length || 0), 0);
+  const pending = albarans.filter((albara) => albara.estat === "PENDENT").length;
+  const inProgress = albarans.filter((albara) => albara.estat === "EN_PREPARACIO").length;
+  const { density } = useDensity();
   return (
-    <div className="prep-stack">
+    <div className={`prep-stack ${density === "operator" ? "prep-console" : ""}`}>
+      {density === "operator" && (
+        <PageHeader
+          variant="operator"
+          eyebrow={empleat ? `${empleat.nom} - ${empleat.magatzem_assignat?.nom || ""}` : "Empleado"}
+          title="Consola de preparacion"
+          description="Cola priorizada para validar lineas, ubicaciones y bloqueos de stock."
+          meta={
+            <div className="operator-summary">
+              <span><strong>{formatNumber(albarans.length)}</strong> preparables</span>
+              <span className={blocked ? "summary-risk" : ""}><strong>{formatNumber(blocked)}</strong> bloqueados</span>
+              <span><strong>{formatNumber(pending)}</strong> pendientes</span>
+              <span><strong>{formatNumber(inProgress)}</strong> en preparacion</span>
+              <span><strong>{formatNumber(lineCount)}</strong> lineas</span>
+            </div>
+          }
+        />
+      )}
       <Panel title="Cola de preparacion" eyebrow={empleat ? `${empleat.nom} - ${empleat.magatzem_assignat?.nom || ""}` : "Empleado"}>
         {albarans.length ? (
-          <div className="prep-list">
-            {albarans.map((albara) => (
-              <article key={albara.id} className="prep-card">
-                <div className="prep-head">
-                  <div>
-                    <Badge tone="warning">{albara.numero_albara}</Badge>
-                    <h3>{albara.client.nom_comercial}</h3>
-                    <p>{albara.linies?.length || 0} lineas - {formatMoney(albara.total)}</p>
+          density === "operator" ? (
+            <PrepTable albarans={albarans} csrfToken={csrfToken} />
+          ) : (
+            <div className="prep-list">
+              {albarans.map((albara) => (
+                <article key={albara.id} className="prep-card">
+                  <div className="prep-head">
+                    <div>
+                      <Badge tone="warning">{albara.numero_albara}</Badge>
+                      <h3>{albara.client.nom_comercial}</h3>
+                      <p>{albara.linies?.length || 0} lineas - {formatMoney(albara.total)}</p>
+                    </div>
+                    <StatusBadge status={albara.estat} />
                   </div>
-                  <StatusBadge status={albara.estat} />
-                </div>
-                <div className="line-chips">
-                  {albara.linies?.map((line) => (
-                    <span key={line.id} className={line.stock_baix ? "danger-chip" : ""}>
-                      {line.nom_producte} - {line.quantitat} uds - {line.ubicacio || "N/A"}
-                    </span>
-                  ))}
-                </div>
-                <form method="post" action={`/preparacio/${albara.id}/`}>
-                  <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
-                  <SubmitButton><PackageCheck size={16} /> Marcar preparado</SubmitButton>
-                </form>
-              </article>
-            ))}
-          </div>
+                  <div className="line-chips">
+                    {albara.linies?.map((line) => (
+                      <span key={line.id} className={line.stock_baix ? "danger-chip" : ""}>
+                        {line.stock_baix ? "Bloqueo stock - " : ""}{line.nom_producte} - {line.quantitat} uds - {line.ubicacio || "N/A"}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="prep-actions">
+                    <ActionLink href={`/albarans/${albara.id}/`} variant="ghost"><Eye size={16} /> Ver detalle</ActionLink>
+                    <form method="post" action={`/preparacio/${albara.id}/`}>
+                      <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
+                      <SubmitButton><PackageCheck size={16} /> Marcar preparado</SubmitButton>
+                    </form>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )
         ) : (
           <EmptyState icon={<ClipboardCheck size={28} />} title="No hay albaranes pendientes" text="La cola de este magatzem esta limpia. Puedes revisar stock o volver al centro de mando." action={<ActionLink href="/stock/" variant="ghost"><Boxes size={16} /> Ver stock</ActionLink>} />
         )}
@@ -1119,12 +1385,78 @@ function PreparacioPage({ payload, csrfToken }: { payload: Record<string, any>; 
   );
 }
 
+function PrepTable({ albarans, csrfToken }: { albarans: Albara[]; csrfToken: string }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Albaran</th>
+            <th>Cliente</th>
+            <th>Lineas</th>
+            <th>Bloqueos</th>
+            <th>Estado</th>
+            <th className="right">Total</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {albarans.map((albara) => {
+            const blocks = albara.linies?.filter((line) => line.stock_baix) || [];
+            const locations = albara.linies?.map((line) => line.ubicacio).filter(Boolean).slice(0, 3).join(", ");
+            return (
+              <tr key={albara.id} className={blocks.length ? "risk-row" : ""}>
+                <td><a className="link-strong" href={`/albarans/${albara.id}/`}>#{albara.numero_albara}</a></td>
+                <td>
+                  <strong>{albara.client.nom_comercial}</strong>
+                  <small className="cell-subtext">{locations || "Sin ubicacion"}</small>
+                </td>
+                <td>{albara.linies?.length || 0}</td>
+                <td>{blocks.length ? <Badge tone="danger">{blocks.length} stock</Badge> : <Badge tone="success">OK</Badge>}</td>
+                <td><StatusBadge status={albara.estat} /></td>
+                <td className="right"><strong>{formatMoney(albara.total)}</strong></td>
+                <td className="prep-table-actions">
+                  <a className="row-action" href={`/albarans/${albara.id}/`} aria-label={`Ver albaran ${albara.numero_albara}`}><Eye size={15} /></a>
+                  <form method="post" action={`/preparacio/${albara.id}/`}>
+                    <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
+                    <button className="row-action row-action-primary" type="submit" aria-label={`Marcar preparado ${albara.numero_albara}`}>
+                      <PackageCheck size={15} />
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function StockPage({ payload }: { payload: Record<string, any>; csrfToken: string; user: AppUser }) {
   const stocks = (payload.stocks || []) as Stock[];
   const magatzems = (payload.magatzems || []) as Warehouse[];
   const categories = (payload.categories || []) as Category[];
+  const lowStock = stocks.filter((stock) => stock.stock_baix).length;
+  const { density } = useDensity();
   return (
-    <div className="stock-layout">
+    <div className={`stock-layout ${density === "operator" ? "operator-stack" : ""}`}>
+      {density === "operator" && (
+        <PageHeader
+          variant="operator"
+          eyebrow={`${stocks.length} posiciones`}
+          title="Inventario operativo"
+          description="Control de existencias por almacen, ubicacion y categoria."
+          actions={<ActionLink href="/stock/reposicio/"><Plus size={16} /> Reposicion</ActionLink>}
+          meta={
+            <div className="operator-summary">
+              <span><strong>{formatNumber(stocks.length)}</strong> posiciones</span>
+              <span className={lowStock ? "summary-risk" : ""}><strong>{formatNumber(lowStock)}</strong> bajo minimo</span>
+              <span><strong>{formatNumber(magatzems.length)}</strong> almacenes</span>
+            </div>
+          }
+        />
+      )}
       <Panel title="Filtros" eyebrow="Inventario">
         <form className="filter-form" method="get" action="/stock/">
           <label>
@@ -1145,7 +1477,7 @@ function StockPage({ payload }: { payload: Record<string, any>; csrfToken: strin
           <ActionLink href="/stock/" variant="ghost">Limpiar</ActionLink>
         </form>
       </Panel>
-      <Panel title="Inventario operativo" eyebrow={`${stocks.length} posiciones`} className="span-2" action={<ActionLink href="/stock/reposicio/"><Plus size={16} /> Reposicion</ActionLink>}>
+      <Panel title={density === "operator" ? "Existencias" : "Inventario operativo"} eyebrow={`${stocks.length} posiciones`} className="span-2" action={density === "command" ? <ActionLink href="/stock/reposicio/"><Plus size={16} /> Reposicion</ActionLink> : null}>
         {stocks.length ? (
           <div className="table-wrap">
             <table>
@@ -1157,19 +1489,26 @@ function StockPage({ payload }: { payload: Record<string, any>; csrfToken: strin
                   <th>Magatzem</th>
                   <th>Ubicacion</th>
                   <th className="right">Cantidad</th>
+                  <th>Estado</th>
+                  <th>Ultimo mov.</th>
                 </tr>
               </thead>
               <tbody>
-                {stocks.map((stock) => (
-                  <tr key={stock.id} className={stock.stock_baix ? "risk-row" : ""}>
-                    <td><Badge tone="neutral">{stock.producte.codi}</Badge></td>
-                    <td>{stock.producte.nom}</td>
-                    <td>{stock.producte.categoria.nom}</td>
-                    <td>{stock.magatzem.nom}</td>
-                    <td><Badge tone="neutral">{stock.ubicacio}</Badge></td>
-                    <td className="right"><strong>{stock.quantitat}</strong></td>
-                  </tr>
-                ))}
+                {stocks.map((stock) => {
+                  const meta = stockTone(stock.quantitat, stock.stock_baix);
+                  return (
+                    <tr key={stock.id} className={stock.stock_baix ? "risk-row" : ""}>
+                      <td><Badge tone="neutral">{stock.producte.codi}</Badge></td>
+                      <td>{stock.producte.nom}</td>
+                      <td>{stock.producte.categoria.nom}</td>
+                      <td>{stock.magatzem.nom}</td>
+                      <td><Badge tone="neutral">{stock.ubicacio}</Badge></td>
+                      <td className="right"><strong>{stock.quantitat}</strong></td>
+                      <td><Badge tone={meta.tone}>{meta.label}</Badge></td>
+                      <td>{formatDate(stock.data_ultima_entrada)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1210,9 +1549,25 @@ function StatsPage({ payload }: { payload: Record<string, any>; csrfToken: strin
   const clients = payload.ranquing_clients || [];
   const delivered = (payload.albarans_entregats || []) as Albara[];
   const maxCategory = Math.max(...categories.map((item: any) => Number(item.total_vendes || 0)), 1);
+  const { density } = useDensity();
 
   return (
-    <div className="dashboard-grid">
+    <div className={density === "operator" ? "stats-layout stats-layout-operator" : "dashboard-grid"}>
+      {density === "operator" && (
+        <PageHeader
+          variant="operator"
+          eyebrow="Analitica"
+          title="Estadisticas"
+          description="Indicadores, rankings y ventas cerradas en vista compacta."
+          meta={
+            <div className="operator-summary">
+              <span><strong>{formatNumber(products.length)}</strong> productos top</span>
+              <span><strong>{formatNumber(categories.length)}</strong> categorias</span>
+              <span><strong>{formatNumber(delivered.length)}</strong> entregados</span>
+            </div>
+          }
+        />
+      )}
       <KpiCard label="Ventas entregadas" value={formatMoney(total.total)} icon={<CircleDollarSign size={20} />} tone="lime" hint="Albaranes entregados" spark={[12, 18, 21, 19, 26, 31, 38]} />
       <KpiCard label="Base imponible" value={formatMoney(total.total_base)} icon={<Gauge size={20} />} tone="cyan" hint="Sin IVA" spark={[8, 13, 17, 21, 23, 28, 35]} />
       <KpiCard label="IVA total" value={formatMoney(total.total_iva)} icon={<Activity size={20} />} tone="violet" hint="Carga fiscal acumulada" spark={[4, 8, 9, 12, 14, 16, 19]} />
@@ -1228,7 +1583,7 @@ function StatsPage({ payload }: { payload: Record<string, any>; csrfToken: strin
               </div>
             ))}
           </div>
-        ) : <EmptyState icon={<BarChart3 size={28} />} title="Sin ventas cerradas" text="Los rankings apareceran al entregar albaranes." />}
+        ) : <EmptyState icon={<BarChart3 size={28} />} title="Sin ventas cerradas" text="Entrega un albaran para activar rankings." action={<ActionLink href="/albarans/" variant="ghost">Ver albaranes</ActionLink>} />}
       </Panel>
       <Panel title="Ventas por categoria" eyebrow="Mix comercial">
         {categories.length ? (
@@ -1241,7 +1596,7 @@ function StatsPage({ payload }: { payload: Record<string, any>; csrfToken: strin
               </div>
             ))}
           </div>
-        ) : <EmptyState icon={<Layers3 size={28} />} title="Sin categorias vendidas" text="Aun no hay informacion suficiente para comparar categorias." />}
+        ) : <EmptyState icon={<Layers3 size={28} />} title="Sin categorias vendidas" text="Las categorias apareceran cuando haya albaranes entregados." action={<ActionLink href="/cataleg/" variant="ghost">Ver catalogo</ActionLink>} />}
       </Panel>
       <Panel title="Ranking clientes" eyebrow="Volumen de compra" className="span-2">
         {clients.length ? (
@@ -1259,10 +1614,10 @@ function StatsPage({ payload }: { payload: Record<string, any>; csrfToken: strin
               </tbody>
             </table>
           </div>
-        ) : <EmptyState icon={<Users size={28} />} title="Sin ranking de clientes" text="No hay compras entregadas para ordenar el rendimiento." />}
+        ) : <EmptyState icon={<Users size={28} />} title="Sin ranking de clientes" text="No hay compras entregadas para ordenar el rendimiento." action={<ActionLink href="/clients/" variant="ghost">Ver clientes</ActionLink>} />}
       </Panel>
       <Panel title="Albaranes entregados" eyebrow={`${delivered.length} cerrados`} className="span-2">
-        {delivered.length ? <AlbaraTable albarans={delivered} compact /> : <EmptyState icon={<Truck size={28} />} title="Sin entregas cerradas" text="Cuando los albaranes lleguen a entregado, apareceran aqui." />}
+        {delivered.length ? <AlbaraTable albarans={delivered} compact /> : <EmptyState icon={<Truck size={28} />} title="Sin entregas cerradas" text="Entrega un albaran para alimentar esta tabla." action={<ActionLink href="/albarans/" variant="ghost">Ver albaranes</ActionLink>} />}
       </Panel>
     </div>
   );
@@ -1317,6 +1672,8 @@ function AuthFrame({ title, text, children }: { title: string; text: string; chi
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <Shell data={initialData} />
+    <DensityProvider>
+      <Shell data={initialData} />
+    </DensityProvider>
   </React.StrictMode>
 );
