@@ -14,10 +14,13 @@ Aurora Ops ERP manages customers, product catalog, delivery notes, preparation q
 
 Screenshots to be added after final visual pass.
 
-- `docs/assets/night-ops-dashboard.png`
-- `docs/assets/day-ops-dashboard.png`
-- `docs/assets/aurora-operator.png`
-- `docs/assets/agent-runs.png`
+### Dark Mode dashboard
+![Aurora Dark Mode dashboard](docs/assets/dark-dashboard.png)
+### Light Mode dashboard
+![Aurora Light Mode dashboard](docs/assets/light-dashboard.png)
+### Aurora Operator
+![Aurora Operator](docs/assets/aurora-operator.png)
+![Aurora Dark Mode dashboard](docs/assets/agent-runs.png)
 
 ## Highlights
 
