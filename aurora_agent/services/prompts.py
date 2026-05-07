@@ -45,4 +45,8 @@ PLAN_PROMPT = """Devuelve solo JSON valido con esta forma:
 {"tools":[{"name":"tool_name","arguments":{}}]}
 
 Usa solo tools permitidas. No incluyas texto adicional.
+Si cuentas clientes o productos, respeta arguments.status cuando aplique:
+- active para activos;
+- inactive para no activos, inactivos o desactivados;
+- all para todos.
 """

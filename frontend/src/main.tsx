@@ -1517,12 +1517,15 @@ function AgentRunDetails({ run, onFeedback }: { run: AgentRunResponse; onFeedbac
 }
 
 function AgentEvidenceList({ evidence }: { evidence: AgentEvidence[] }) {
-  if (!evidence.length) return null;
+  const uniqueEvidence = evidence.filter((item, index, items) => (
+    index === items.findIndex((candidate) => candidate.type === item.type && candidate.label === item.label && candidate.url === item.url)
+  ));
+  if (!uniqueEvidence.length) return null;
   return (
     <div className="agent-mini-panel">
       <strong>Evidencia</strong>
       <div>
-        {evidence.slice(0, 8).map((item, index) => (
+        {uniqueEvidence.slice(0, 8).map((item, index) => (
           item.url ? <a key={`${item.label}-${index}`} href={item.url}>{item.label}</a> : <span key={`${item.label}-${index}`}>{item.label}</span>
         ))}
       </div>

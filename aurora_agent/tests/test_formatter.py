@@ -1,5 +1,6 @@
 from django.test import TestCase, override_settings
 
+from albaranes.models import Client
 from aurora_agent.services.formatter import format_final_answer
 from aurora_agent.services.orchestrator import AuroraOperatorOrchestrator, route_tools
 from aurora_agent.tests.factories import create_domain
@@ -36,3 +37,39 @@ class AgentFormatterTests(TestCase):
         result = AuroraOperatorOrchestrator(force_mock=True).run(self.data["user"], "Marca todos los albaranes como entregados")
         self.assertEqual(result["status"], "blocked")
         self.assertEqual(result["tool_calls"], [])
+
+    def test_count_inactive_customers(self):
+        Client.objects.create(
+            codi_client="CLI002",
+            nom_comercial="Cliente Dos",
+            cif="B00000002",
+            persona_contacte="Luis",
+            telefon="600000001",
+            email="inactive@example.com",
+            adreca_entrega="Calle 2",
+            poblacio="Madrid",
+            codi_postal="28002",
+            actiu=False,
+        )
+        result = AuroraOperatorOrchestrator(force_mock=True).run(self.data["user"], "Dime cuantos clientes no activos hay")
+        self.assertEqual(result["tool_calls"][0]["name"], "count_customers")
+        self.assertEqual(result["tool_calls"][0]["arguments"]["status"], "inactive")
+        self.assertIn("Hay 1 cliente no activo", result["answer"])
+        self.assertNotIn("Hay 1 cliente activo", result["answer"])
+
+    def test_count_active_customers(self):
+        result = AuroraOperatorOrchestrator(force_mock=True).run(self.data["user"], "Dime cuantos clientes activos hay")
+        self.assertEqual(result["tool_calls"][0]["arguments"]["status"], "active")
+        self.assertIn("Hay 1 cliente activo", result["answer"])
+
+    def test_followup_inactive_customers_uses_previous_customer_context(self):
+        orchestrator = AuroraOperatorOrchestrator(force_mock=True)
+        first = orchestrator.run(self.data["user"], "Dime cuantos clientes activos hay")
+        second = orchestrator.run(self.data["user"], "y no activos?", conversation_id=first["conversation_id"])
+        self.assertEqual(second["tool_calls"][0]["name"], "count_customers")
+        self.assertEqual(second["tool_calls"][0]["arguments"]["status"], "inactive")
+        self.assertIn("clientes no activos", second["answer"])
+
+    def test_inactive_filter_does_not_return_active_answer(self):
+        result = AuroraOperatorOrchestrator(force_mock=True).run(self.data["user"], "Dime cuantos clientes no activos hay")
+        self.assertNotIn("cliente activo registrado", result["answer"])

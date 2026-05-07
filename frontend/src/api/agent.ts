@@ -40,6 +40,7 @@ export type AgentSuggestedAction = {
 export type AgentToolCall = {
   name: string;
   status: string;
+  arguments?: Record<string, unknown>;
 };
 
 export type AgentRunResponse = {

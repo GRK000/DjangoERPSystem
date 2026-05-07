@@ -11,6 +11,7 @@ from aurora_agent.services.formatter import compact_tool_result, format_final_an
 from aurora_agent.services.llm import get_llm_client
 from aurora_agent.services.prompts import PLAN_PROMPT, SYSTEM_PROMPT
 from aurora_agent.services.safety import check_input_safety, refusal_payload
+from aurora_agent.services.semantic_query import parse_semantic_query, previous_semantic_context, semantic_memory
 from aurora_agent.tools.registry import TOOLS, get_tool
 
 
@@ -30,18 +31,40 @@ def parse_json_object(text):
     return {}
 
 
-def route_tools(message: str, page_context=None):
+def route_tools(message: str, page_context=None, semantic_query=None):
     text = normalize_text(message)
+    semantic_query = semantic_query or parse_semantic_query(message)
+    entity = semantic_query.entity
+    intent = semantic_query.intent
+    filters = semantic_query.filters or {}
+
+    if intent == "count":
+        if entity == "customers":
+            return [{"name": "count_customers", "arguments": {"status": filters.get("status", "active")}}]
+        if entity == "products":
+            if filters.get("status") == "low_stock":
+                return [{"name": "count_low_stock_products", "arguments": {}}]
+            return [{"name": "count_products", "arguments": {"status": filters.get("status", "active")}}]
+        if entity == "delivery_notes":
+            return [{"name": "count_delivery_notes", "arguments": {"status": filters.get("status", "all")}}]
+        if entity == "stock" and filters.get("status") == "low_stock":
+            return [{"name": "count_low_stock_products", "arguments": {}}]
+
+    if intent == "list" and entity == "products" and filters.get("status") == "low_stock":
+        return [{"name": "list_low_stock_products", "arguments": {"limit": 12}}]
+    if intent == "prioritize" and entity in {"delivery_notes", ""}:
+        return [{"name": "prioritize_delivery_notes", "arguments": {"limit": 12}}]
+
     tools = []
     count_question = any(term in text for term in ["cuantos", "cuantas", "numero de", "número de", "total de", "hay "])
     if count_question and "cliente" in text:
-        return [{"name": "count_customers", "arguments": {}}]
+        return [{"name": "count_customers", "arguments": {"status": filters.get("status", "active")}}]
     if count_question and "producto" in text and ("stock bajo" in text or "bajo stock" in text):
         return [{"name": "count_low_stock_products", "arguments": {}}]
     if count_question and "producto" in text:
-        return [{"name": "count_products", "arguments": {}}]
+        return [{"name": "count_products", "arguments": {"status": filters.get("status", "active")}}]
     if count_question and ("albaran" in text or "albaranes" in text):
-        return [{"name": "count_delivery_notes", "arguments": {}}]
+        return [{"name": "count_delivery_notes", "arguments": {"status": filters.get("status", "all")}}]
     if "hay stock bajo" in text:
         return [{"name": "count_low_stock_products", "arguments": {}}]
     if any(word in text for word in ["preparar", "preparables", "prioriza", "priorizar", "pendientes"]):
@@ -146,7 +169,13 @@ class AuroraOperatorOrchestrator:
         start = time.perf_counter()
         safety = check_input_safety(message, settings.AGENT_MAX_MESSAGE_LENGTH)
         conversation = self._get_or_create_conversation(user, message, conversation_id)
-        AgentMessage.objects.create(conversation=conversation, role=AgentMessage.Role.USER, content=message, metadata={"page_context": page_context or {}})
+        semantic_query = parse_semantic_query(message, previous_semantic_context(conversation))
+        AgentMessage.objects.create(
+            conversation=conversation,
+            role=AgentMessage.Role.USER,
+            content=message,
+            metadata={"page_context": page_context or {}, "semantic_query": semantic_query.to_dict()},
+        )
         run = AgentRun.objects.create(
             conversation=conversation,
             user=user,
@@ -161,13 +190,21 @@ class AuroraOperatorOrchestrator:
             run.final_answer = payload["answer"]
             run.latency_ms = self._elapsed(start)
             run.save(update_fields=["status", "final_answer", "latency_ms"])
-            AgentMessage.objects.create(conversation=conversation, role=AgentMessage.Role.ASSISTANT, content=payload["answer"], metadata={"status": "blocked", "run_id": run.id, "tool_calls": []})
+            AgentMessage.objects.create(
+                conversation=conversation,
+                role=AgentMessage.Role.ASSISTANT,
+                content=payload["answer"],
+                metadata={"status": "blocked", "run_id": run.id, "tool_calls": [], "semantic_memory": semantic_memory(semantic_query)},
+            )
             conversation.save(update_fields=["updated_at"])
             return {**payload, "conversation_id": conversation.id, "run_id": run.id}
 
-        plan = [] if self.client.provider == "mock" else plan_with_llm(self.client, message, page_context)
+        deterministic_plan = []
+        if semantic_query.intent == "count" and semantic_query.entity:
+            deterministic_plan = route_tools(message, page_context, semantic_query=semantic_query)
+        plan = deterministic_plan if deterministic_plan else [] if self.client.provider == "mock" else plan_with_llm(self.client, message, page_context)
         if not plan:
-            plan = route_tools(message, page_context)
+            plan = route_tools(message, page_context, semantic_query=semantic_query)
 
         tool_outputs = []
         for item in plan:
@@ -194,7 +231,7 @@ class AuroraOperatorOrchestrator:
                 error_message=error,
             )
             AgentMessage.objects.create(conversation=conversation, role=AgentMessage.Role.TOOL, content=spec.name, metadata={"tool_call_id": call.id, "result": call.result})
-            tool_outputs.append({"name": spec.name, "status": status, "result": result})
+            tool_outputs.append({"name": spec.name, "status": status, "arguments": item.get("arguments") or {}, "result": result})
 
         evidence = []
         for output in tool_outputs:
@@ -211,12 +248,12 @@ class AuroraOperatorOrchestrator:
             run.completion_tokens = llm_response.completion_tokens
             run.total_tokens = llm_response.total_tokens
         run.save()
-        tool_calls = [{"name": output["name"], "status": output["status"]} for output in tool_outputs]
+        tool_calls = [{"name": output["name"], "status": output["status"], "arguments": output.get("arguments", {})} for output in tool_outputs]
         AgentMessage.objects.create(
             conversation=conversation,
             role=AgentMessage.Role.ASSISTANT,
             content=answer,
-            metadata={"evidence": evidence[:20], "suggested_actions": actions, "tool_calls": tool_calls, "run_id": run.id, "status": "ok"},
+            metadata={"evidence": evidence[:20], "suggested_actions": actions, "tool_calls": tool_calls, "run_id": run.id, "status": "ok", "semantic_memory": semantic_memory(semantic_query)},
         )
         conversation.save(update_fields=["updated_at"])
         return {

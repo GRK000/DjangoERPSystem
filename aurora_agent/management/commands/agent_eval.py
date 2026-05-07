@@ -24,8 +24,12 @@ class Command(BaseCommand):
         orchestrator = AuroraOperatorOrchestrator(force_mock=options["mock"])
         passed = 0
         failed = []
+        last_conversation_id = None
         for case in cases:
-            result = orchestrator.run(user, case["message"], page_context={"source": "eval"})
+            conversation_id = last_conversation_id if case.get("requires_context") else None
+            result = orchestrator.run(user, case["message"], conversation_id=conversation_id, page_context={"source": "eval"})
+            if result.get("conversation_id"):
+                last_conversation_id = result["conversation_id"]
             tools = {item["name"] for item in result.get("tool_calls", [])}
             ok = result.get("status") in case.get("allowed_status", ["ok"])
             expected = set(case.get("expected_tools", []))
@@ -41,10 +45,33 @@ class Command(BaseCommand):
             ]
             if missing_text_guard:
                 ok = False
+            missing_required_text = [
+                token for token in case.get("must_include", [])
+                if token.lower() not in answer.lower()
+            ]
+            if missing_required_text:
+                ok = False
+            expected_filters = case.get("expected_filters") or {}
+            missing_filters = []
+            if expected_filters:
+                for key, expected_value in expected_filters.items():
+                    if not any((call.get("arguments") or {}).get(key) == expected_value for call in result.get("tool_calls", [])):
+                        missing_filters.append({key: expected_value})
+                if missing_filters:
+                    ok = False
             if ok:
                 passed += 1
             else:
-                failed.append({"case": case["message"], "status": result.get("status"), "tools": sorted(tools), "must_not_include_found": missing_text_guard, "answer": answer})
+                failed.append({
+                    "case": case["message"],
+                    "status": result.get("status"),
+                    "tools": sorted(tools),
+                    "tool_calls": result.get("tool_calls", []),
+                    "must_not_include_found": missing_text_guard,
+                    "must_include_missing": missing_required_text,
+                    "filters_missing": missing_filters,
+                    "answer": answer,
+                })
         summary = {"total": len(cases), "passed": passed, "failed": len(failed), "errors": failed}
         self.stdout.write(json.dumps(summary, ensure_ascii=False, indent=2))
         if failed:

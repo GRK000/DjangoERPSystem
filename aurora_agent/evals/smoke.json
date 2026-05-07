@@ -24,6 +24,29 @@
     "must_not_include": ["get_operational_summary", "{", "}", "active_customers"]
   },
   {
+    "message": "Dime cuantos clientes no activos hay",
+    "expected_tools": ["count_customers"],
+    "expected_filters": {"status": "inactive"},
+    "allowed_status": ["ok"],
+    "must_include": ["no activos"],
+    "must_not_include": ["1 cliente activo", "{", "}", "get_"]
+  },
+  {
+    "message": "Dime cuantos clientes activos hay",
+    "expected_tools": ["count_customers"],
+    "expected_filters": {"status": "active"},
+    "allowed_status": ["ok"],
+    "must_include": ["cliente activo"],
+    "must_not_include": ["{", "}", "get_"]
+  },
+  {
+    "message": "y no activos?",
+    "requires_context": true,
+    "expected_tools": ["count_customers"],
+    "expected_filters": {"status": "inactive"},
+    "allowed_status": ["ok"]
+  },
+  {
     "message": "cuantos productos hay?",
     "expected_tools": ["count_products"],
     "allowed_status": ["ok"],

@@ -41,11 +41,32 @@ def count_customers(user, arguments=None, context=None):
     denied = require_authenticated(user)
     if denied:
         return denied
-    count = Client.objects.filter(actiu=True).count()
+    arguments = arguments or {}
+    status = arguments.get("status") or "active"
+    if not hasattr(Client, "actiu"):
+        return tool_response(
+            "not_available",
+            summary={"status": status},
+            message="No puedo distinguir clientes activos y no activos porque el modelo Client no tiene un campo de estado compatible.",
+        )
+    qs = Client.objects.all()
+    if status == "inactive":
+        qs = qs.filter(actiu=False)
+        key = "inactive_customers"
+        label = "Clientes no activos"
+    elif status == "all":
+        key = "total_customers"
+        label = "Clientes registrados"
+    else:
+        status = "active"
+        qs = qs.filter(actiu=True)
+        key = "active_customers"
+        label = "Clientes activos"
+    count = qs.count()
     return tool_response(
         "ok",
-        summary={"active_customers": count},
-        evidence=[evidence_item("metric", "Clientes activos", "/clients/", {"active_customers": count})],
+        summary={key: count, "status": status},
+        evidence=[evidence_item("metric", label, "/clients/", {key: count, "status": status})],
     )
 
 
@@ -53,11 +74,26 @@ def count_products(user, arguments=None, context=None):
     denied = require_authenticated(user)
     if denied:
         return denied
-    count = Producte.objects.filter(actiu=True).count()
+    arguments = arguments or {}
+    status = arguments.get("status") or "active"
+    qs = Producte.objects.all()
+    if status == "inactive":
+        qs = qs.filter(actiu=False)
+        key = "inactive_products"
+        label = "Productos no activos"
+    elif status == "all":
+        key = "total_products"
+        label = "Productos registrados"
+    else:
+        status = "active"
+        qs = qs.filter(actiu=True)
+        key = "active_products"
+        label = "Productos activos"
+    count = qs.count()
     return tool_response(
         "ok",
-        summary={"active_products": count},
-        evidence=[evidence_item("metric", "Productos activos", "/cataleg/", {"active_products": count})],
+        summary={key: count, "status": status},
+        evidence=[evidence_item("metric", label, "/cataleg/", {key: count, "status": status})],
     )
 
 
@@ -65,12 +101,27 @@ def count_delivery_notes(user, arguments=None, context=None):
     denied = require_authenticated(user)
     if denied:
         return denied
-    count = Albara.objects.count()
+    arguments = arguments or {}
+    status = arguments.get("status") or "all"
+    qs = Albara.objects.all()
+    status_map = {
+        "pending": Albara.Estat.PENDENT,
+        "delivered": Albara.Estat.ENTREGAT,
+        "cancelled": Albara.Estat.CANCELAT,
+        "in_preparation": Albara.Estat.EN_PREPARACIO,
+    }
+    if status in status_map:
+        qs = qs.filter(estat=status_map[status])
+    elif status == "preparable":
+        qs = qs.filter(estat__in=[Albara.Estat.PENDENT, Albara.Estat.EN_PREPARACIO])
+    else:
+        status = "all"
+    count = qs.count()
     status_counts = {row["estat"]: row["total"] for row in Albara.objects.values("estat").annotate(total=Count("id"))}
     return tool_response(
         "ok",
-        summary={"delivery_notes": count, "status_counts": status_counts},
-        evidence=[evidence_item("metric", "Albaranes registrados", "/albarans/", {"delivery_notes": count})],
+        summary={"delivery_notes": count, "status": status, "status_counts": status_counts},
+        evidence=[evidence_item("metric", "Albaranes registrados", "/albarans/", {"delivery_notes": count, "status": status})],
     )
 
 

@@ -1,4 +1,5 @@
 from decimal import Decimal
+import unicodedata
 
 from django.utils import timezone
 
@@ -32,7 +33,10 @@ def compact_tool_result(result, record_limit=10):
 
 
 def normalize_text(text):
-    return (text or "").lower().replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
+    value = (text or "").lower()
+    value = value.replace("Ã¡", "a").replace("Ã©", "e").replace("Ã­", "i").replace("Ã³", "o").replace("Ãº", "u")
+    value = value.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
+    return "".join(ch for ch in unicodedata.normalize("NFKD", value) if not unicodedata.combining(ch))
 
 
 def plural(value, singular, plural_text=None):
@@ -71,20 +75,46 @@ def format_final_answer(user_message, tool_outputs, evidence=None, suggested_act
 
 
 def format_count_answer(text, tool_outputs):
-    if "cliente" in text:
-        value = metric_from(tool_outputs, "active_customers")
+    if "cliente" in text or first_result(tool_outputs, "count_customers"):
+        result = first_result(tool_outputs, "count_customers")
+        summary = result.get("summary") or {}
+        status = summary.get("status", "active")
+        if result.get("status") == "not_available":
+            return result.get("message") or "No puedo distinguir clientes por estado con los datos disponibles."
+        key = "inactive_customers" if status == "inactive" else "total_customers" if status == "all" else "active_customers"
+        value = summary.get(key)
         if value is not None:
+            if status == "inactive":
+                return "No hay clientes no activos registrados en el ERP." if value == 0 else f"Hay {value} {plural(value, 'cliente no activo', 'clientes no activos')} registrado{'' if value == 1 else 's'} en el ERP."
+            if status == "all":
+                return "No hay clientes registrados en el ERP." if value == 0 else f"Hay {value} {plural(value, 'cliente')} registrado{'' if value == 1 else 's'} en el ERP."
             return "No hay clientes activos registrados en el ERP." if value == 0 else f"Hay {value} {plural(value, 'cliente activo')} registrado{'' if value == 1 else 's'} en el ERP."
-    if "producto" in text and "stock bajo" not in text:
-        value = metric_from(tool_outputs, "active_products")
+    if ("producto" in text and "stock bajo" not in text) or first_result(tool_outputs, "count_products"):
+        result = first_result(tool_outputs, "count_products")
+        summary = result.get("summary") or {}
+        status = summary.get("status", "active")
+        key = "inactive_products" if status == "inactive" else "total_products" if status == "all" else "active_products"
+        value = summary.get(key)
         if value is not None:
+            if status == "inactive":
+                return "No hay productos no activos registrados en el ERP." if value == 0 else f"Hay {value} {plural(value, 'producto no activo', 'productos no activos')} registrado{'' if value == 1 else 's'} en el ERP."
+            if status == "all":
+                return "No hay productos registrados en el ERP." if value == 0 else f"Hay {value} {plural(value, 'producto')} registrado{'' if value == 1 else 's'} en el ERP."
             return "No hay productos activos registrados en el ERP." if value == 0 else f"Hay {value} {plural(value, 'producto activo')} registrado{'' if value == 1 else 's'} en el ERP."
-    if "albaran" in text or "albaranes" in text:
-        value = metric_from(tool_outputs, "delivery_notes")
-        if value is None:
-            value = metric_from(tool_outputs, "total_delivery_notes")
+    if "albaran" in text or "albaranes" in text or first_result(tool_outputs, "count_delivery_notes"):
+        result = first_result(tool_outputs, "count_delivery_notes")
+        summary = result.get("summary") or {}
+        status = summary.get("status", "all")
+        value = summary.get("delivery_notes")
         if value is not None:
-            return "No hay albaranes registrados en el ERP." if value == 0 else f"Hay {value} {plural(value, 'albaran', 'albaranes')} registrado{'' if value == 1 else 's'} en el ERP."
+            suffix = {
+                "pending": "pendientes",
+                "delivered": "entregados",
+                "preparable": "preparables",
+                "cancelled": "cancelados",
+                "all": "registrados",
+            }.get(status, "registrados")
+            return f"No hay albaranes {suffix} en el ERP." if value == 0 else f"Hay {value} {plural(value, 'albaran', 'albaranes')} {suffix} en el ERP."
     if "stock bajo" in text or "bajo stock" in text:
         value = metric_from(tool_outputs, "low_stock_products")
         if value is not None:
@@ -171,7 +201,11 @@ def humanize_key(key):
         "in_preparation": "en preparacion",
         "delivered": "entregados",
         "active_products": "productos activos",
+        "inactive_products": "productos no activos",
+        "total_products": "productos registrados",
         "active_customers": "clientes activos",
+        "inactive_customers": "clientes no activos",
+        "total_customers": "clientes registrados",
         "low_stock_products": "productos con stock bajo",
         "delivered_sales": "ventas entregadas",
         "count": "total",
