@@ -450,7 +450,7 @@ function ThemeToggle() {
       title={isLight ? "Aurora Day Ops" : "Aurora Ops nocturno"}
     >
       {isLight ? <Sun size={16} /> : <Moon size={16} />}
-      <span>{isLight ? "Day Ops" : "Dark"}</span>
+      <span>{isLight ? "Light" : "Dark"}</span>
     </button>
   );
 }
@@ -644,7 +644,7 @@ const pageTitles: Record<string, string> = {
   albara_detail: "Detalle de albaran",
   albara_form: "Nuevo albaran",
   linia_form: "Linea de albaran",
-  consulta_form: "Consulta publica",
+  consulta_form: "Consulta",
   consulta_result: "Resultado de consulta",
   preparacio: "Preparacion",
   stock_list: "Stock",
@@ -1492,7 +1492,7 @@ function AgentConsole({ csrfToken, user }: { csrfToken: string; user: AppUser })
           description="Inicia sesion para consultar albaranes, stock, preparacion y analitica con contexto del ERP."
           actions={<ActionLink href="/login/?next=/consulta/"><LogIn size={16} /> Entrar</ActionLink>}
         />
-        <Panel title="Consulta publica de albaran" eyebrow="Tracking">
+        <Panel title="Consulta de albaran" eyebrow="Tracking">
           <form className="lookup-form" method="get" action="/consulta/resultat/">
             <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />
             <Search size={20} />
