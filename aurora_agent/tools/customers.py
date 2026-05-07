@@ -32,3 +32,36 @@ def get_top_customers(user, arguments=None, context=None):
         evidence=[evidence_item("client", row["name"], row["url"], {"total_sales": row["total_sales"]}) for row in rows],
         message="" if rows else "No hay clientes con albaranes entregados.",
     )
+
+
+def list_customers(user, arguments=None, context=None):
+    denied = require_authenticated(user)
+    if denied:
+        return denied
+    arguments = arguments or {}
+    status = arguments.get("status") or "active"
+    qs = Client.objects.all().order_by("codi_client")
+    if status == "inactive":
+        qs = qs.filter(actiu=False)
+    elif status != "all":
+        status = "active"
+        qs = qs.filter(actiu=True)
+    rows = [
+        {
+            "id": client.id,
+            "code": client.codi_client,
+            "name": client.nom_comercial,
+            "active": client.actiu,
+            "contact": client.persona_contacte,
+            "email": client.email,
+            "url": f"/clients/{client.id}/",
+        }
+        for client in qs[: max_results(arguments.get("limit"))]
+    ]
+    return tool_response(
+        "ok" if rows else "empty",
+        summary={"count": len(rows), "status": status},
+        records=rows,
+        evidence=[evidence_item("client", row["name"], row["url"], {"active": row["active"]}) for row in rows],
+        message="" if rows else "No hay clientes para estos filtros.",
+    )

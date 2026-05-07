@@ -14,8 +14,6 @@ DESTRUCTIVE_TERMS = (
     "actualizar",
     "marca",
     "marcar",
-    "entrega",
-    "entregar",
     "crea",
     "crear",
     "inserta",

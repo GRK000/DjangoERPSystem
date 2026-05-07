@@ -60,14 +60,18 @@ def metric_from(tool_outputs, key):
 
 def format_final_answer(user_message, tool_outputs, evidence=None, suggested_actions=None):
     text = normalize_text(user_message)
+    if "sin stock" in text:
+        return format_out_of_stock_answer(tool_outputs)
     count_answer = format_count_answer(text, tool_outputs)
     if count_answer:
         return count_answer
+    if "bloque" in text:
+        return format_blockers_answer(tool_outputs)
     if "stock bajo" in text or "stock critico" in text:
         return format_low_stock_answer(tool_outputs)
     if "prepar" in text or "prioriza" in text or "pendiente" in text:
         return format_preparation_answer(tool_outputs)
-    if "venta" in text or "estadistica" in text or "ranking" in text:
+    if "venta" in text or "estadistica" in text or "ranking" in text or "base imponible" in text or "iva" in text:
         return format_sales_answer(tool_outputs)
     if "resumen" in text or "resume" in text or "operacion" in text:
         return format_operation_summary(tool_outputs)
@@ -93,9 +97,13 @@ def format_count_answer(text, tool_outputs):
         result = first_result(tool_outputs, "count_products")
         summary = result.get("summary") or {}
         status = summary.get("status", "active")
-        key = "inactive_products" if status == "inactive" else "total_products" if status == "all" else "active_products"
+        key = "out_of_stock_products" if status == "out_of_stock" else "low_stock_products" if status == "low_stock" else "inactive_products" if status == "inactive" else "total_products" if status == "all" else "active_products"
         value = summary.get(key)
         if value is not None:
+            if status == "out_of_stock":
+                return "No hay productos sin stock." if value == 0 else f"Hay {value} {plural(value, 'producto')} sin stock."
+            if status == "low_stock":
+                return "No hay productos con stock bajo." if value == 0 else f"Hay {value} {plural(value, 'producto')} con stock bajo."
             if status == "inactive":
                 return "No hay productos no activos registrados en el ERP." if value == 0 else f"Hay {value} {plural(value, 'producto no activo', 'productos no activos')} registrado{'' if value == 1 else 's'} en el ERP."
             if status == "all":
@@ -128,9 +136,19 @@ def format_low_stock_answer(tool_outputs):
     count = (result.get("summary") or {}).get("count", len(records))
     if count == 0:
         return "No hay productos con stock bajo."
-    names = ", ".join(f"{row.get('sku')} {row.get('product')} ({row.get('quantity')} uds)" for row in records[:5])
-    suffix = f" Principales: {names}." if names else ""
-    return f"Hay {count} {plural(count, 'producto')} con stock bajo.{suffix}"
+    lines = "\n".join(f"- {row.get('product')}: {row.get('quantity')} unidades disponibles en {row.get('warehouse')}" for row in records[:8])
+    recommendation = "\n\nRecomendacion: revisa reposicion antes de preparar albaranes pendientes."
+    return f"Hay {count} {plural(count, 'producto')} con stock bajo:\n{lines}{recommendation}"
+
+
+def format_out_of_stock_answer(tool_outputs):
+    result = first_result(tool_outputs, "list_out_of_stock_products")
+    records = result.get("records") or []
+    count = (result.get("summary") or {}).get("count", len(records))
+    if count == 0:
+        return "No hay productos sin stock."
+    lines = "\n".join(f"- {row.get('product')}: 0 unidades en {row.get('warehouse')}" for row in records[:8])
+    return f"Hay {count} {plural(count, 'producto')} sin stock:\n{lines}\n\nRecomendacion: prioriza reposicion o sustituye lineas bloqueadas."
 
 
 def format_preparation_answer(tool_outputs):
@@ -142,13 +160,28 @@ def format_preparation_answer(tool_outputs):
         preparable = summary.get("preparable", 0)
         if count == 0:
             return "No hay albaranes pendientes para preparar ahora."
-        first = records[0] if records else {}
-        detail = f" El primero a revisar es {first.get('code')} de {first.get('customer')}." if first else ""
-        return f"Hay {count} albaranes pendientes en cola; {preparable} parecen preparables segun stock disponible.{detail}"
+        preparable_rows = [row for row in records if row.get("preparable")]
+        blocked_rows = [row for row in records if not row.get("preparable")]
+        if not preparable_rows:
+            return f"No hay albaranes preparables con el stock actual. Hay {len(blocked_rows)} albaranes bloqueados o pendientes de revision."
+        lines = "\n".join(f"- {row.get('code')} · {row.get('customer')}" for row in preparable_rows[:6])
+        blocked_line = f"\n\nHay {len(blocked_rows)} albaran{'es' if len(blocked_rows) != 1 else ''} bloqueado{'s' if len(blocked_rows) != 1 else ''} por falta de stock." if blocked_rows else ""
+        return f"Puedes preparar {preparable} albaranes pendientes con el stock actual:\n{lines}{blocked_line}\n\nRecomendacion: prepara primero los albaranes sin bloqueos y revisa stock antes de prometer entregas."
+    return format_blockers_answer(tool_outputs) if first_result(tool_outputs, "analyze_stock_blockers") else format_generic_answer(tool_outputs)
+
+
+def format_blockers_answer(tool_outputs):
     blockers = first_result(tool_outputs, "analyze_stock_blockers")
     blocked = (blockers.get("summary") or {}).get("blocked_delivery_notes")
     if blocked is not None:
-        return "No se detectan bloqueos de stock en preparacion." if blocked == 0 else f"Hay {blocked} albaranes bloqueados por stock."
+        if blocked == 0:
+            return "No se detectan albaranes bloqueados por stock en preparacion."
+        lines = []
+        for item in blockers.get("records", [])[:5]:
+            dn = item.get("delivery_note", {})
+            products = ", ".join(line.get("product", "") for line in item.get("blocked_lines", [])[:3])
+            lines.append(f"- {dn.get('code')} · {dn.get('customer')}: {products}")
+        return f"Hay {blocked} albaranes bloqueados por stock:\n" + "\n".join(lines)
     return format_generic_answer(tool_outputs)
 
 
@@ -157,8 +190,10 @@ def format_sales_answer(tool_outputs):
     summary = stats.get("summary") or {}
     if summary:
         total = summary.get("delivered_sales", 0)
+        base = summary.get("base", 0)
+        vat = summary.get("vat", 0)
         delivered = (summary.get("status_counts") or {}).get("ENTREGAT", 0)
-        return f"Las ventas entregadas suman {total:.2f} EUR sobre {delivered} albaranes entregados."
+        return f"Las ventas entregadas suman {total:.2f} EUR sobre {delivered} albaranes entregados. Base imponible: {base:.2f} EUR. IVA: {vat:.2f} EUR."
     return format_generic_answer(tool_outputs)
 
 

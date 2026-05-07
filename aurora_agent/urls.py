@@ -10,5 +10,7 @@ urlpatterns = [
     path("conversations/", views.conversations, name="conversations"),
     path("conversations/<int:conversation_id>/", views.conversation_detail, name="conversation_detail"),
     path("run/", views.run, name="run"),
+    path("runs/", views.runs, name="runs"),
+    path("runs/<int:run_id>/", views.run_detail, name="run_detail"),
     path("feedback/", views.feedback, name="feedback"),
 ]

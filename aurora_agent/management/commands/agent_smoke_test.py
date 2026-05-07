@@ -19,7 +19,7 @@ class Command(BaseCommand):
         user = self._get_user(options.get("user"))
         orchestrator = AuroraOperatorOrchestrator(force_mock=options["mock"])
         result = orchestrator.run(user, options["message"], page_context={"source": "cli"})
-        if result.get("status") not in {"ok", "blocked"}:
+        if result.get("status") not in {"ok", "blocked", "out_of_scope"}:
             raise CommandError(result.get("answer") or "Agent smoke test failed")
         if options["as_json"]:
             self.stdout.write(json.dumps(result, ensure_ascii=False, indent=2))

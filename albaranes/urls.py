@@ -110,6 +110,11 @@ urlpatterns = [
         views.consulta_result,
         name="consulta_resultat"
     ),
+    path(
+        "agent-runs/",
+        views.agent_runs,
+        name="agent_runs"
+    ),
 
     # preparacio empleats
     path(

@@ -5,6 +5,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 
 from aurora_agent.models import AgentConversation, AgentMessage, AgentRun, AgentToolCall
 from aurora_agent.services.formatter import compact_tool_result, format_final_answer, normalize_text
@@ -44,6 +45,8 @@ def route_tools(message: str, page_context=None, semantic_query=None):
         if entity == "products":
             if filters.get("status") == "low_stock":
                 return [{"name": "count_low_stock_products", "arguments": {}}]
+            if filters.get("status") == "out_of_stock":
+                return [{"name": "count_products", "arguments": {"status": "out_of_stock"}}]
             return [{"name": "count_products", "arguments": {"status": filters.get("status", "active")}}]
         if entity == "delivery_notes":
             return [{"name": "count_delivery_notes", "arguments": {"status": filters.get("status", "all")}}]
@@ -52,6 +55,19 @@ def route_tools(message: str, page_context=None, semantic_query=None):
 
     if intent == "list" and entity == "products" and filters.get("status") == "low_stock":
         return [{"name": "list_low_stock_products", "arguments": {"limit": 12}}]
+    if entity in {"products", "stock"} and filters.get("status") == "out_of_stock":
+        return [{"name": "list_out_of_stock_products", "arguments": {"limit": 12}}]
+    if entity == "products" and intent == "list":
+        return [{"name": "list_products", "arguments": {"status": filters.get("status", "active"), "stock_filter": filters.get("stock_filter", ""), "limit": 12}}]
+    if entity == "customers" and intent == "list":
+        return [{"name": "list_customers", "arguments": {"status": filters.get("status", "active"), "limit": 12}}]
+    if entity == "delivery_notes" and intent in {"list", "blockers"}:
+        status = filters.get("status", "all")
+        return [{"name": "analyze_stock_blockers" if status == "blocked" else "list_delivery_notes", "arguments": {"status": status, "blocked": status == "blocked", "preparable": status == "preparable", "limit": 12}}]
+    if entity == "sales":
+        return [{"name": "get_sales_statistics", "arguments": {"period": filters.get("period", "all")}}]
+    if entity == "operations" or intent == "summarize":
+        return [{"name": "summarize_daily_operations", "arguments": {}}]
     if intent == "prioritize" and entity in {"delivery_notes", ""}:
         return [{"name": "prioritize_delivery_notes", "arguments": {"limit": 12}}]
 
@@ -95,6 +111,45 @@ def route_tools(message: str, page_context=None, semantic_query=None):
             deduped.append(tool)
             seen.add(tool["name"])
     return deduped[:6]
+
+
+def classify_request(message: str, semantic_query=None) -> str:
+    text = normalize_text(message)
+    semantic_query = semantic_query or parse_semantic_query(message)
+    if semantic_query.intent == "unsafe":
+        return "unsafe"
+    if semantic_query.intent == "help":
+        return "app_help"
+    if any(term in text for term in ("que dia", "que fecha", "fecha de hoy", "que hora", "hora es")):
+        return "utility_date_time"
+    if semantic_query.intent == "out_of_scope":
+        return "out_of_scope"
+    return "erp_query"
+
+
+def routed_answer(category: str) -> dict[str, Any]:
+    if category == "app_help":
+        return {
+            "answer": "Puedo ayudarte con consultas operativas de Aurora Ops ERP: clientes, productos, stock, albaranes, preparacion, ventas, bloqueos y resumen diario. En esta version soy read-only.",
+            "status": "ok",
+        }
+    if category == "utility_date_time":
+        now = timezone.localtime()
+        return {
+            "answer": f"Hoy es {now.strftime('%d/%m/%Y')} y la hora local del servidor es {now.strftime('%H:%M')}. Para consultas operativas, puedo ayudarte con albaranes, stock, productos, clientes, ventas y preparacion.",
+            "status": "ok",
+        }
+    if category == "out_of_scope":
+        return {
+            "answer": "Estoy diseñado para consultas operativas de Aurora Ops ERP. Puedo ayudarte con albaranes, stock, productos, clientes, ventas y preparacion.",
+            "status": "out_of_scope",
+        }
+    if category == "unsafe":
+        return {
+            "answer": "No puedo ayudar con solicitudes que intenten revelar secretos, saltarse instrucciones de seguridad o modificar datos. Aurora Operator V1 es read-only.",
+            "status": "blocked",
+        }
+    return {"answer": "", "status": "ok"}
 
 
 def plan_with_llm(client, message, page_context):
@@ -170,11 +225,12 @@ class AuroraOperatorOrchestrator:
         safety = check_input_safety(message, settings.AGENT_MAX_MESSAGE_LENGTH)
         conversation = self._get_or_create_conversation(user, message, conversation_id)
         semantic_query = parse_semantic_query(message, previous_semantic_context(conversation))
+        route_category = classify_request(message, semantic_query)
         AgentMessage.objects.create(
             conversation=conversation,
             role=AgentMessage.Role.USER,
             content=message,
-            metadata={"page_context": page_context or {}, "semantic_query": semantic_query.to_dict()},
+            metadata={"page_context": page_context or {}, "semantic_query": semantic_query.to_dict(), "route_category": route_category},
         )
         run = AgentRun.objects.create(
             conversation=conversation,
@@ -183,6 +239,38 @@ class AuroraOperatorOrchestrator:
             provider=self.client.provider,
             model=self.client.model,
         )
+
+        if route_category != "erp_query":
+            payload = routed_answer(route_category)
+            run.status = AgentRun.Status.BLOCKED if payload["status"] in {"blocked", "out_of_scope"} else AgentRun.Status.OK
+            run.final_answer = payload["answer"]
+            run.latency_ms = self._elapsed(start)
+            run.save(update_fields=["status", "final_answer", "latency_ms"])
+            AgentMessage.objects.create(
+                conversation=conversation,
+                role=AgentMessage.Role.ASSISTANT,
+                content=payload["answer"],
+                metadata={
+                    "status": payload["status"],
+                    "run_id": run.id,
+                    "tool_calls": [],
+                    "semantic_query": semantic_query.to_dict(),
+                    "route_category": route_category,
+                    "semantic_memory": semantic_memory(semantic_query),
+                },
+            )
+            conversation.save(update_fields=["updated_at"])
+            return {
+                "conversation_id": conversation.id,
+                "run_id": run.id,
+                "answer": payload["answer"],
+                "evidence": [],
+                "suggested_actions": [],
+                "tool_calls": [],
+                "status": payload["status"],
+                "semantic_query": semantic_query.to_dict(),
+                "route_category": route_category,
+            }
 
         if not safety.allowed:
             payload = refusal_payload(safety.reason)
@@ -194,10 +282,10 @@ class AuroraOperatorOrchestrator:
                 conversation=conversation,
                 role=AgentMessage.Role.ASSISTANT,
                 content=payload["answer"],
-                metadata={"status": "blocked", "run_id": run.id, "tool_calls": [], "semantic_memory": semantic_memory(semantic_query)},
+                metadata={"status": "blocked", "run_id": run.id, "tool_calls": [], "semantic_query": semantic_query.to_dict(), "semantic_memory": semantic_memory(semantic_query)},
             )
             conversation.save(update_fields=["updated_at"])
-            return {**payload, "conversation_id": conversation.id, "run_id": run.id}
+            return {**payload, "conversation_id": conversation.id, "run_id": run.id, "semantic_query": semantic_query.to_dict(), "route_category": route_category}
 
         deterministic_plan = []
         if semantic_query.intent == "count" and semantic_query.entity:
@@ -253,7 +341,7 @@ class AuroraOperatorOrchestrator:
             conversation=conversation,
             role=AgentMessage.Role.ASSISTANT,
             content=answer,
-            metadata={"evidence": evidence[:20], "suggested_actions": actions, "tool_calls": tool_calls, "run_id": run.id, "status": "ok", "semantic_memory": semantic_memory(semantic_query)},
+            metadata={"evidence": evidence[:20], "suggested_actions": actions, "tool_calls": tool_calls, "run_id": run.id, "status": "ok", "semantic_query": semantic_query.to_dict(), "route_category": route_category, "semantic_memory": semantic_memory(semantic_query)},
         )
         conversation.save(update_fields=["updated_at"])
         return {
@@ -264,6 +352,8 @@ class AuroraOperatorOrchestrator:
             "suggested_actions": actions,
             "tool_calls": tool_calls,
             "status": "ok",
+            "semantic_query": semantic_query.to_dict(),
+            "route_category": route_category,
         }
 
     def _get_or_create_conversation(self, user, message, conversation_id=None):

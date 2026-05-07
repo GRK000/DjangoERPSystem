@@ -1,64 +1,78 @@
 # Aurora Operator
 
-Aurora Operator es el agente operativo read-only de Aurora Ops ERP. Consulta datos del ERP mediante tools whitelisted y responde con evidencia, tool calls y acciones sugeridas de navegacion.
+Aurora Operator is the read-only operations agent integrated into Aurora Ops ERP.
 
-## Que Hace
+## Architecture
 
-- Resume operaciones, albaranes, preparacion, stock, clientes y ventas.
-- Prioriza albaranes pendientes.
-- Detecta bloqueos de stock.
-- Lista productos con stock bajo.
-- Consulta rankings y estadisticas.
+Frontend `/consulta/` -> `/api/agent/run/` -> Django orchestrator -> request router -> semantic query -> whitelisted read-only tools -> Django ORM -> formatter -> grounded answer.
 
-## Que No Hace
+The LLM never receives database access. It can only work with compact JSON results returned by registered tools.
 
-- No modifica datos.
-- No prepara albaranes.
-- No marca entregas.
-- No cambia stock.
-- No crea movimientos.
-- No borra ni edita registros.
+## Request Router
 
-## Arquitectura
+The router classifies messages before planning:
 
-Frontend React -> `/api/agent/run/` -> Orquestador Django -> planner LLM o heuristico -> tools read-only -> ORM -> respuesta grounded.
+- `erp_query`: use semantic query and read-only ERP tools.
+- `app_help`: answer capabilities without ERP tools.
+- `utility_date_time`: answer server local date/time without ERP tools.
+- `unsafe`: block secret, prompt injection or write requests.
+- `out_of_scope`: redirect to ERP domain without ERP tools.
 
-El LLM no accede a la base de datos. Solo recibe resultados resumidos de tools.
+## Semantic Query
 
-## Variables de Entorno
+The parser extracts:
 
-Ver `.env.example`.
+- `intent`: `count`, `list`, `summarize`, `prioritize`, `analyze`, `blockers`, `help`, `unsafe`, `out_of_scope`.
+- `entity`: `customers`, `products`, `delivery_notes`, `stock`, `sales`, `operations`.
+- `filters`: active/inactive, low stock, out of stock, pending, delivered, blocked, preparable, period.
+- minimal follow-up context: last entity, intent, metric and filters.
 
-Modo mock seguro:
+Supported examples:
 
-```bash
-AI_PROVIDER=mock
-AGENT_ENABLE_REAL_LLM=false
+- `Cuantos clientes no activos hay?`
+- `Que productos estan sin stock?`
+- `Que albaranes son preparables?`
+- `Que producto bloquea la preparacion?`
+- `Cual es la base imponible?`
+
+## Tools
+
+All tools are read-only and return:
+
+```json
+{
+  "status": "ok",
+  "summary": {},
+  "records": [],
+  "evidence": [],
+  "message": ""
+}
 ```
 
-Modo OpenAI-compatible:
+Main tools:
 
-```bash
-AI_PROVIDER=openai_compatible
-AI_BASE_URL=https://api.groq.com/openai/v1
-AI_MODEL=llama-3.3-70b-versatile
-AI_API_KEY=your_api_key_here
-AGENT_ENABLE_REAL_LLM=true
-```
+- `count_customers`, `list_customers`
+- `count_products`, `list_products`, `list_low_stock_products`, `list_out_of_stock_products`
+- `count_delivery_notes`, `list_delivery_notes`, `check_delivery_note_stock`, `analyze_stock_blockers`, `prioritize_delivery_notes`
+- `get_sales_statistics`, `get_top_products`, `get_top_customers`
+- `summarize_daily_operations`
 
-No se guardan ni se exponen API keys.
+## Tracing
 
-## Endpoints
+Every run stores:
 
-- `GET /api/agent/status/`
-- `GET /api/agent/suggestions/`
-- `GET /api/agent/conversations/`
-- `POST /api/agent/conversations/`
-- `GET /api/agent/conversations/<id>/`
-- `POST /api/agent/run/`
-- `POST /api/agent/feedback/`
+- input and final answer;
+- semantic query and route category in message metadata;
+- provider/model and latency;
+- tool calls with arguments, status, result summary and latency;
+- feedback.
 
-Todos requieren usuario autenticado.
+Staff users can inspect traces at `/agent-runs/` and through:
+
+- `GET /api/agent/runs/`
+- `GET /api/agent/runs/<id>/`
+
+Secrets and API keys are not serialized.
 
 ## CLI
 
@@ -67,32 +81,18 @@ python manage.py agent_smoke_test --mock "Que albaranes puedo preparar hoy?"
 python manage.py agent_eval --dataset aurora_agent/evals/smoke.json --mock
 ```
 
-## UI
+## Security
 
-Abre `/consulta/` con sesion iniciada. La pantalla muestra estado del proveedor, sugerencias, historial, evidencia, tool calls, acciones sugeridas y feedback.
+- V1 is read-only.
+- Write/destructive requests are blocked.
+- Prompt injection and secret requests are blocked.
+- Out-of-scope requests do not execute ERP tools.
+- Tool results are capped by `AGENT_MAX_TOOL_RESULTS`.
+- Normal users cannot list global runs.
 
-## Docker
+## Limitations
 
-```bash
-cp .env.example .env
-docker compose up --build
-```
-
-## CI/CD
-
-`.github/workflows/ci.yml` ejecuta checks de Django, tests, smoke/eval del agente, build de frontend y build Docker. En `main` prepara una imagen etiquetada para GHCR sin publicar secretos.
-
-## Seguridad
-
-- Tools read-only declaradas en registry.
-- Guardrails bloquean escritura, prompts internos y secretos.
-- Resultados de tools se limitan por `AGENT_MAX_TOOL_RESULTS`.
-- Conversaciones y runs se aíslan por usuario.
-- Suggested actions solo navegan, filtran o inspeccionan.
-
-## Limitaciones
-
-- V1 no ejecuta acciones de escritura.
-- El planner LLM tiene fallback heuristico.
-- No hay streaming.
-- No hay busqueda semantica ni RAG documental.
+- No write actions.
+- No streaming.
+- No document RAG.
+- The deterministic router handles the portfolio demo; the LLM planner is optional and bounded by the same registry.

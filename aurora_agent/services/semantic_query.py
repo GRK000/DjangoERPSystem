@@ -46,11 +46,19 @@ def parse_semantic_query(message: str, previous_context: dict[str, Any] | None =
 
 
 def detect_intent(text: str) -> str:
-    if any(term in text for term in ("borra", "borrar", "elimina", "eliminar", "cambia", "cambiar", "marca", "marcar", "entrega", "prepara ")):
+    if is_unsafe_text(text):
+        return "unsafe"
+    if is_help_text(text):
+        return "help"
+    if is_out_of_scope_text(text):
+        return "out_of_scope"
+    if any(term in text for term in ("borra", "borrar", "elimina", "eliminar", "cambia", "cambiar", "marca", "marcar", "prepara ")):
         return "unsafe"
     if "prioriza" in text or "priorizar" in text or "preparables" in text or "puedo preparar" in text:
         return "prioritize"
-    if "bloquea" in text or "bloqueos" in text or "bloqueado" in text:
+    if "bloquea" in text or "bloqueos" in text or "bloqueado" in text or "bloqueados" in text:
+        return "blockers"
+    if "analiza" in text or "analisis" in text:
         return "analyze"
     if any(term in text for term in ("cuanto", "cuantos", "cuanta", "cuantas", "numero", "total", "hay")):
         return "count"
@@ -68,9 +76,11 @@ def detect_entity(text: str) -> str:
         return "products"
     if "albaran" in text or "albaranes" in text:
         return "delivery_notes"
-    if "stock" in text:
+    if "operacion" in text or "operativa" in text or "hoy" in text:
+        return "operations"
+    if "stock" in text or "reponer" in text:
         return "stock"
-    if "venta" in text or "iva" in text or "estadistica" in text:
+    if "venta" in text or "ventas" in text or "iva" in text or "base imponible" in text or "estadistica" in text:
         return "sales"
     return ""
 
@@ -96,20 +106,34 @@ def detect_filters(text: str) -> dict[str, Any]:
     elif "todos" in text or "todas" in text:
         filters["status"] = "all"
 
-    if "stock bajo" in text or "bajo stock" in text:
+    if "stock bajo" in text or "bajo stock" in text or "stock critico" in text:
         filters["status"] = "low_stock"
     if "sin stock" in text or "stock cero" in text:
-        filters["status"] = "low_stock"
-        filters["stock_zero"] = True
+        filters["status"] = "out_of_stock"
+        filters["stock_filter"] = "out_of_stock"
+    elif filters.get("status") == "low_stock":
+        filters["stock_filter"] = "low_stock"
 
     if "pendiente" in text or "pendientes" in text:
         filters["status"] = "pending"
+    elif "en preparacion" in text or "preparacion" in text:
+        filters["status"] = "in_preparation"
+    elif "preparado" in text or "preparados" in text:
+        filters["status"] = "prepared"
+    elif "enviado" in text or "enviados" in text:
+        filters["status"] = "sent"
     elif "entregado" in text or "entregados" in text or "entregadas" in text:
         filters["status"] = "delivered"
     elif "preparable" in text or "preparables" in text:
         filters["status"] = "preparable"
+    elif "bloqueado" in text or "bloqueados" in text or "bloquea" in text:
+        filters["status"] = "blocked"
     elif "cancelado" in text or "cancelados" in text:
         filters["status"] = "cancelled"
+    if "hoy" in text:
+        filters["period"] = "today"
+    if "mes" in text:
+        filters["period"] = "month"
     return filters
 
 
@@ -122,6 +146,10 @@ def is_followup(text: str, entity: str) -> bool:
         "activos",
         "pendientes",
         "entregados",
+        "bloqueados",
+        "preparables",
+        "sin stock",
+        "stock bajo",
     }
 
 
@@ -130,6 +158,24 @@ def apply_defaults(query: SemanticQuery) -> None:
         query.filters["status"] = "active"
     if query.entity == "delivery_notes" and query.intent == "count" and not query.filters.get("status"):
         query.filters["status"] = "all"
+    if query.entity == "sales" and not query.filters.get("period"):
+        query.filters["period"] = "all"
+
+
+def is_help_text(text: str) -> bool:
+    return any(term in text for term in ("que puedes hacer", "ayuda", "capacidades", "como me ayudas", "help"))
+
+
+def is_unsafe_text(text: str) -> bool:
+    return any(term in text for term in ("api key", "apikey", "system prompt", "prompt interno", "ignora tus instrucciones", "dime la api", "revela"))
+
+
+def is_out_of_scope_text(text: str) -> bool:
+    erp_terms = ("cliente", "producto", "stock", "albaran", "albaranes", "venta", "preparacion", "operacion", "erp", "aurora")
+    utility_terms = ("que dia", "fecha", "hora", "hoy")
+    if any(term in text for term in erp_terms + utility_terms):
+        return False
+    return any(term in text for term in ("react", "python", "historia", "receta", "chiste", "poema", "explicame"))
 
 
 def semantic_memory(query: SemanticQuery) -> dict[str, Any]:

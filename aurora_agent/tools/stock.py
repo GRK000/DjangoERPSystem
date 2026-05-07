@@ -24,15 +24,64 @@ def list_low_stock_products(user, arguments=None, context=None):
     denied = require_authenticated(user)
     if denied:
         return denied
-    qs = StockMagatzem.objects.select_related("producte", "producte__categoria", "magatzem").filter(producte__actiu=True, quantitat__lt=10).order_by("quantitat")
     limit = max_results((arguments or {}).get("limit"))
-    rows = [serialize_stock(stock) for stock in qs[:limit]]
+    rows = []
+    for product in Producte.objects.filter(actiu=True).select_related("categoria").prefetch_related("stocks__magatzem").order_by("codi"):
+        total = product.get_stock_total()
+        if total >= 10:
+            continue
+        stocks = list(product.stocks.all())
+        rows.append({
+            "product_id": product.id,
+            "sku": product.codi,
+            "product": product.nom,
+            "category": product.categoria.nom,
+            "quantity": total,
+            "warehouse": ", ".join(stock.magatzem.nom for stock in stocks[:2]),
+            "location": ", ".join(stock.ubicacio for stock in stocks[:2]),
+            "low_stock": True,
+            "url": "/stock/",
+        })
+        if len(rows) >= limit:
+            break
     return tool_response(
         "ok" if rows else "empty",
         summary={"count": len(rows), "threshold": 10},
         records=rows,
         evidence=[evidence_item("stock", f"{row['sku']} {row['warehouse']}", "/stock/", {"quantity": row["quantity"]}) for row in rows],
         message="" if rows else "No hay productos por debajo del umbral de stock bajo.",
+    )
+
+
+def list_out_of_stock_products(user, arguments=None, context=None):
+    denied = require_authenticated(user)
+    if denied:
+        return denied
+    limit = max_results((arguments or {}).get("limit"))
+    rows = []
+    for product in Producte.objects.filter(actiu=True).select_related("categoria").prefetch_related("stocks__magatzem").order_by("codi"):
+        if product.get_stock_total() != 0:
+            continue
+        stocks = list(product.stocks.all())
+        rows.append({
+            "product_id": product.id,
+            "sku": product.codi,
+            "product": product.nom,
+            "category": product.categoria.nom,
+            "quantity": 0,
+            "warehouse": ", ".join(stock.magatzem.nom for stock in stocks[:2]) or "Sin almacen",
+            "location": ", ".join(stock.ubicacio for stock in stocks[:2]),
+            "low_stock": True,
+            "url": "/stock/",
+        })
+        if len(rows) >= limit:
+            break
+    return tool_response(
+        "ok" if rows else "empty",
+        summary={"count": len(rows), "stock_filter": "out_of_stock"},
+        records=rows,
+        evidence=[evidence_item("stock", f"{row['sku']} {row['warehouse']}", "/stock/", {"quantity": row["quantity"]}) for row in rows],
+        message="" if rows else "No hay productos sin stock.",
     )
 
 

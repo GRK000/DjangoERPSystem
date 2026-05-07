@@ -18,5 +18,6 @@ class AgentCommandTests(TestCase):
 
     def test_agent_eval_mock(self):
         out = StringIO()
+        call_command("seed_demo_data", "--reset", "--quiet", stdout=StringIO())
         call_command("agent_eval", "--mock", "--dataset", "aurora_agent/evals/smoke.json", stdout=out)
         self.assertIn('"failed": 0', out.getvalue())

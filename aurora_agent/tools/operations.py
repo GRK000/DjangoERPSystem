@@ -76,11 +76,17 @@ def count_products(user, arguments=None, context=None):
         return denied
     arguments = arguments or {}
     status = arguments.get("status") or "active"
-    qs = Producte.objects.all()
+    qs = Producte.objects.prefetch_related("stocks").all()
     if status == "inactive":
         qs = qs.filter(actiu=False)
         key = "inactive_products"
         label = "Productos no activos"
+    elif status == "low_stock":
+        count = sum(1 for product in qs.filter(actiu=True) if 0 < product.get_stock_total() < 10)
+        return tool_response("ok", summary={"low_stock_products": count, "status": status}, evidence=[evidence_item("metric", "Productos con stock bajo", "/stock/", {"low_stock_products": count})])
+    elif status == "out_of_stock":
+        count = sum(1 for product in qs.filter(actiu=True) if product.get_stock_total() == 0)
+        return tool_response("ok", summary={"out_of_stock_products": count, "status": status}, evidence=[evidence_item("metric", "Productos sin stock", "/stock/", {"out_of_stock_products": count})])
     elif status == "all":
         key = "total_products"
         label = "Productos registrados"
@@ -109,6 +115,8 @@ def count_delivery_notes(user, arguments=None, context=None):
         "delivered": Albara.Estat.ENTREGAT,
         "cancelled": Albara.Estat.CANCELAT,
         "in_preparation": Albara.Estat.EN_PREPARACIO,
+        "prepared": Albara.Estat.PREPARAT,
+        "sent": Albara.Estat.ENVIAT,
     }
     if status in status_map:
         qs = qs.filter(estat=status_map[status])
@@ -129,7 +137,7 @@ def count_low_stock_products(user, arguments=None, context=None):
     denied = require_authenticated(user)
     if denied:
         return denied
-    count = StockMagatzem.objects.filter(producte__actiu=True, quantitat__lt=10).count()
+    count = sum(1 for product in Producte.objects.filter(actiu=True).prefetch_related("stocks") if product.get_stock_total() < 10)
     return tool_response(
         "ok",
         summary={"low_stock_products": count, "threshold": 10},

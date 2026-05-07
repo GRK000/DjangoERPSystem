@@ -6,7 +6,7 @@ from django.views.decorators.http import require_http_methods
 
 from .models import AgentConversation, AgentFeedback, AgentRun
 from .permissions import require_api_auth
-from .serializers import conversation_to_dict
+from .serializers import conversation_to_dict, run_to_dict
 from .services.llm import agent_status
 from .services.orchestrator import AuroraOperatorOrchestrator
 from .services.rate_limit import check_rate_limit
@@ -106,3 +106,37 @@ def feedback(request):
         defaults={"rating": rating, "comment": (body.get("comment") or "")[:1000]},
     )
     return JsonResponse({"feedback": {"id": feedback_obj.id, "rating": feedback_obj.rating}})
+
+
+@require_http_methods(["GET"])
+@require_api_auth
+def runs(request):
+    if not request.user.is_staff:
+        return JsonResponse({"detail": "Solo staff puede consultar trazas globales."}, status=403)
+    qs = AgentRun.objects.select_related("user", "conversation").prefetch_related("feedback").order_by("-created_at")
+    status_filter = request.GET.get("status")
+    mock_filter = request.GET.get("mock")
+    user_filter = request.GET.get("user")
+    query = request.GET.get("q")
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    if mock_filter in {"true", "false"}:
+        qs = qs.filter(provider="mock") if mock_filter == "true" else qs.exclude(provider="mock")
+    if user_filter:
+        qs = qs.filter(user__username__icontains=user_filter)
+    if query:
+        qs = qs.filter(input_message__icontains=query)
+    return JsonResponse({"runs": [run_to_dict(run) for run in qs[:50]]})
+
+
+@require_http_methods(["GET"])
+@require_api_auth
+def run_detail(request, run_id):
+    qs = AgentRun.objects.select_related("user", "conversation").prefetch_related("tool_calls", "feedback")
+    if request.user.is_staff:
+        run_obj = qs.filter(id=run_id).first()
+    else:
+        run_obj = qs.filter(id=run_id, user=request.user).first()
+    if not run_obj:
+        return JsonResponse({"detail": "Run no encontrado."}, status=404)
+    return JsonResponse({"run": run_to_dict(run_obj, include_detail=True)})

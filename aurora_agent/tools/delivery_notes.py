@@ -61,7 +61,17 @@ def list_delivery_notes(user, arguments=None, context=None):
     arguments = arguments or {}
     qs = Albara.objects.select_related("client", "magatzem").order_by("-data_creacio")
     status = arguments.get("status")
-    if status:
+    status_map = {
+        "pending": Albara.Estat.PENDENT,
+        "in_preparation": Albara.Estat.EN_PREPARACIO,
+        "prepared": Albara.Estat.PREPARAT,
+        "sent": Albara.Estat.ENVIAT,
+        "delivered": Albara.Estat.ENTREGAT,
+        "cancelled": Albara.Estat.CANCELAT,
+    }
+    if status in status_map:
+        qs = qs.filter(estat=status_map[status])
+    elif status and status not in {"all", "preparable", "blocked"}:
         qs = qs.filter(estat=str(status).upper())
     customer_query = arguments.get("customer_query") or arguments.get("customer")
     if customer_query:
@@ -71,7 +81,22 @@ def list_delivery_notes(user, arguments=None, context=None):
     if arguments.get("date_to"):
         qs = qs.filter(data_creacio__date__lte=arguments["date_to"])
     limit = max_results(arguments.get("limit"))
-    rows = [serialize_delivery_note(albara) for albara in qs[:limit]]
+    rows = []
+    for albara in qs[: max(limit * 3, limit)]:
+        row = serialize_delivery_note(albara)
+        if arguments.get("preparable") or status == "preparable":
+            stock = check_delivery_note_stock(user, {"delivery_note_id": albara.id}, context)
+            if stock.get("summary", {}).get("preparable") is not True:
+                continue
+            row["preparable"] = True
+        if arguments.get("blocked") or status == "blocked":
+            stock = check_delivery_note_stock(user, {"delivery_note_id": albara.id}, context)
+            if not stock.get("summary", {}).get("blocked"):
+                continue
+            row["blocked_lines"] = stock.get("summary", {}).get("blocked", 0)
+        rows.append(row)
+        if len(rows) >= limit:
+            break
     return tool_response(
         "ok" if rows else "empty",
         summary={"count": len(rows), "limit": limit},

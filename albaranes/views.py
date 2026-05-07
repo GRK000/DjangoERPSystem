@@ -212,6 +212,7 @@ def _command_items(user):
                 {"type": "Pantalla", "label": "Preparacio", "href": "/preparacio/"},
                 {"type": "Pantalla", "label": "Stock", "href": "/stock/"},
                 {"type": "Pantalla", "label": "Estadistiques", "href": "/estadistiques/"},
+                {"type": "Pantalla", "label": "Agent Runs", "href": "/agent-runs/"},
             ]
         )
 
@@ -607,6 +608,14 @@ def albara_change_state(request, id):
 
 def consulta_form(request):
     return render_app(request, "consulta_form", {})
+
+
+@login_required
+def agent_runs(request):
+    if not request.user.is_staff:
+        messages.error(request, "Solo staff puede consultar trazas del agente.")
+        return redirect("home")
+    return render_app(request, "agent_runs", {})
 
 
 def consulta_result(request):

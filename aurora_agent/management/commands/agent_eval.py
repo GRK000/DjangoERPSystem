@@ -59,6 +59,12 @@ class Command(BaseCommand):
                         missing_filters.append({key: expected_value})
                 if missing_filters:
                     ok = False
+            expected_intent = case.get("expected_intent")
+            if expected_intent and (result.get("semantic_query") or {}).get("intent") != expected_intent:
+                ok = False
+            expected_route = case.get("expected_route")
+            if expected_route and result.get("route_category") != expected_route:
+                ok = False
             if ok:
                 passed += 1
             else:
@@ -70,6 +76,10 @@ class Command(BaseCommand):
                     "must_not_include_found": missing_text_guard,
                     "must_include_missing": missing_required_text,
                     "filters_missing": missing_filters,
+                    "expected_intent": expected_intent,
+                    "actual_intent": (result.get("semantic_query") or {}).get("intent"),
+                    "expected_route": expected_route,
+                    "actual_route": result.get("route_category"),
                     "answer": answer,
                 })
         summary = {"total": len(cases), "passed": passed, "failed": len(failed), "errors": failed}
