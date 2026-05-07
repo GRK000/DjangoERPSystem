@@ -1963,6 +1963,7 @@ type AgentRunTrace = {
   status: string;
   intent: string;
   entity: string;
+  filters?: Record<string, unknown>;
   provider: string;
   model: string;
   mock: boolean;
@@ -2013,6 +2014,7 @@ function AgentRunsPage() {
         eyebrow="Aurora Operator"
         title="Trazabilidad Agent Runs"
         description="Panel interno para revisar routing, semantic query, tools read-only, latencia y feedback."
+        actions={<ActionLink href="/consulta/" variant="ghost"><Search size={16} /> Consulta</ActionLink>}
       />
       {error && <div className="notice notice-warning"><AlertTriangle size={18} /> {error}</div>}
       <Panel title="Filtros" eyebrow="Observabilidad">
@@ -2070,20 +2072,23 @@ function AgentRunsPage() {
             <span><strong>Input</strong>{selected.input}</span>
             <span><strong>Respuesta</strong>{selected.answer}</span>
             <span><strong>Semantic query</strong>{selected.intent || "n/a"} · {selected.entity || "n/a"}</span>
+            <span><strong>Filtros</strong>{Object.entries(selected.filters || {}).map(([key, value]) => `${key}: ${String(value)}`).join(" · ") || "sin filtros"}</span>
             <span><strong>Feedback</strong>{selected.feedback || "sin feedback"}</span>
           </div>
-          <div className="agent-run-details">
-            {(selected.tool_calls || []).map((call) => (
-              <div className="agent-mini-panel" key={`${selected.id}-${call.name}`}>
-                <strong>{call.name}</strong>
-                <div>
-                  <Badge tone={call.status === "ok" ? "success" : call.status === "empty" ? "neutral" : "warning"}>{call.status}</Badge>
-                  <span>{call.latency_ms} ms</span>
-                  <span>{Object.entries(call.arguments || {}).map(([key, value]) => `${key}: ${String(value)}`).join(" · ") || "sin argumentos"}</span>
+          {(selected.tool_calls || []).length > 0 && (
+            <div className="agent-run-details">
+              {(selected.tool_calls || []).map((call) => (
+                <div className="agent-mini-panel" key={`${selected.id}-${call.name}`}>
+                  <strong>{call.name}</strong>
+                  <div>
+                    <Badge tone={call.status === "ok" ? "success" : call.status === "empty" ? "neutral" : "warning"}>{call.status}</Badge>
+                    <span>{call.latency_ms} ms</span>
+                    <span>{Object.entries(call.arguments || {}).map(([key, value]) => `${key}: ${String(value)}`).join(" · ") || "sin argumentos"}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Panel>
       )}
     </div>
