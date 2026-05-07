@@ -24,6 +24,7 @@ import {
   Layers3,
   LogIn,
   LogOut,
+  Moon,
   Package,
   PackageCheck,
   Plus,
@@ -32,6 +33,7 @@ import {
   Settings,
   Shield,
   Sparkles,
+  Sun,
   Truck,
   UserPlus,
   Users,
@@ -69,14 +71,25 @@ type InitialData = {
 };
 
 type DensityMode = "command" | "operator";
+type ThemeMode = "dark" | "light";
 
 const densityStorageKey = "aurora-density-mode";
+const themeStorageKey = "aurora-theme";
 const DensityContext = createContext<{
   density: DensityMode;
   setDensity: (density: DensityMode) => void;
 }>({
   density: "command",
   setDensity: () => undefined,
+});
+const ThemeContext = createContext<{
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
+  toggleTheme: () => void;
+}>({
+  theme: "dark",
+  setTheme: () => undefined,
+  toggleTheme: () => undefined,
 });
 
 function readStoredDensity(): DensityMode {
@@ -85,6 +98,15 @@ function readStoredDensity(): DensityMode {
     return stored === "operator" || stored === "command" ? stored : "command";
   } catch {
     return "command";
+  }
+}
+
+function readStoredTheme(): ThemeMode {
+  try {
+    const stored = window.localStorage.getItem(themeStorageKey);
+    return stored === "light" || stored === "dark" ? stored : "dark";
+  } catch {
+    return "dark";
   }
 }
 
@@ -109,6 +131,31 @@ function DensityProvider({ children }: { children: ReactNode }) {
 
 function useDensity() {
   return useContext(DensityContext);
+}
+
+function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setThemeState] = useState<ThemeMode>(readStoredTheme);
+
+  const setTheme = (nextTheme: ThemeMode) => {
+    setThemeState(nextTheme);
+    try {
+      window.localStorage.setItem(themeStorageKey, nextTheme);
+    } catch {
+      // Storage can be unavailable in restricted browser contexts.
+    }
+  };
+
+  const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  return <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>{children}</ThemeContext.Provider>;
+}
+
+function useTheme() {
+  return useContext(ThemeContext);
 }
 
 type Client = {
@@ -217,6 +264,9 @@ const initialData: InitialData = initialNode?.textContent
       messages: [],
       commandItems: [],
     };
+
+document.documentElement.dataset.theme = readStoredTheme();
+document.documentElement.dataset.density = readStoredDensity();
 
 const statusMeta: Record<string, { label: string; tone: string }> = {
   PENDENT: { label: "Pendent", tone: "warning" },
@@ -387,6 +437,24 @@ function DensityToggle() {
   );
 }
 
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const isLight = theme === "light";
+  return (
+    <button
+      className="theme-toggle"
+      type="button"
+      onClick={toggleTheme}
+      aria-label={isLight ? "Activar modo oscuro" : "Activar Aurora Day Ops"}
+      aria-pressed={isLight}
+      title={isLight ? "Aurora Day Ops" : "Aurora Ops nocturno"}
+    >
+      {isLight ? <Sun size={16} /> : <Moon size={16} />}
+      <span>{isLight ? "Day Ops" : "Dark"}</span>
+    </button>
+  );
+}
+
 function PageHeader({
   variant = "compact",
   eyebrow,
@@ -532,6 +600,7 @@ function Shell({ data }: { data: InitialData }) {
           </div>
           <div className="topbar-actions">
             <DensityToggle />
+            <ThemeToggle />
             <button className="command-trigger" type="button" onClick={() => setPaletteOpen(true)}>
               <Search size={16} />
               <span>Buscar entidad o modulo</span>
@@ -596,6 +665,8 @@ function Sidebar({ user }: { user: AppUser }) {
     { href: "/estadistiques/", label: "Analitica", icon: BarChart3, public: false },
     { href: "/consulta/", label: "Consulta", icon: Search, public: true },
   ];
+  const currentPath = window.location.pathname;
+  const isActive = (href: string) => href === "/" ? currentPath === "/" : currentPath.startsWith(href);
 
   return (
     <aside className="sidebar">
@@ -612,7 +683,7 @@ function Sidebar({ user }: { user: AppUser }) {
           .map((item) => {
             const Icon = item.icon;
             return (
-              <a key={item.href} href={item.href}>
+              <a key={item.href} href={item.href} className={isActive(item.href) ? "active" : ""} aria-current={isActive(item.href) ? "page" : undefined}>
                 <Icon size={18} />
                 <span>{item.label}</span>
               </a>
@@ -1928,8 +1999,10 @@ function AuthFrame({ title, text, children }: { title: string; text: string; chi
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <DensityProvider>
-      <Shell data={initialData} />
-    </DensityProvider>
+    <ThemeProvider>
+      <DensityProvider>
+        <Shell data={initialData} />
+      </DensityProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );
