@@ -1184,6 +1184,38 @@ tbody tr:hover {
   gap: 12px;
 }
 
+.agent-runs-layout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.trace-filters {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+}
+
+.trace-detail {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.trace-detail span {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(8, 10, 18, 0.28);
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.trace-detail strong {
+  color: var(--text);
+}
+
 .stats-layout-operator .page-header {
   margin-bottom: 0;
 }
@@ -1761,6 +1793,7 @@ html[data-theme="light"] .category-list a,
 html[data-theme="light"] .product-card,
 html[data-theme="light"] .lookup-form,
 html[data-theme="light"] .prep-card,
+html[data-theme="light"] .trace-detail span,
 html[data-theme="light"] .bar-list div {
   background: var(--surface-muted);
   border-color: var(--border);
@@ -2032,6 +2065,7 @@ html[data-density="operator"] .dashboard-grid,
 html[data-density="operator"] .detail-grid,
 html[data-density="operator"] .catalog-layout,
 html[data-density="operator"] .stock-layout,
+html[data-density="operator"] .agent-runs-layout,
 html[data-density="operator"] .stats-layout {
   gap: 10px;
 }
@@ -2331,6 +2365,7 @@ html[data-density="operator"] .risk-row:hover td {
   .detail-grid,
   .catalog-layout,
   .stock-layout,
+  .agent-runs-layout,
   .stats-layout,
   .ops-hero,
   .page-header,
@@ -2395,7 +2430,8 @@ html[data-density="operator"] .risk-row:hover td {
   }
 
   .status-board,
-  .form-grid {
+  .form-grid,
+  .trace-filters {
     grid-template-columns: 1fr;
   }
 

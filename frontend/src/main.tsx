@@ -650,6 +650,7 @@ const pageTitles: Record<string, string> = {
   stock_list: "Stock",
   stock_reposicio: "Reposicion",
   estadistiques: "Estadisticas",
+  agent_runs: "Agent Runs",
   auth_login: "Acceso",
   auth_register: "Registro",
 };
@@ -664,6 +665,7 @@ function Sidebar({ user }: { user: AppUser }) {
     { href: "/stock/", label: "Stock", icon: Boxes, public: false },
     { href: "/estadistiques/", label: "Analitica", icon: BarChart3, public: false },
     { href: "/consulta/", label: "Consulta", icon: Search, public: true },
+    { href: "/agent-runs/", label: "Trazas", icon: Database, public: false, staffOnly: true },
   ];
   const currentPath = window.location.pathname;
   const isActive = (href: string) => href === "/" ? currentPath === "/" : currentPath.startsWith(href);
@@ -679,7 +681,7 @@ function Sidebar({ user }: { user: AppUser }) {
       </a>
       <nav className="nav-stack">
         {nav
-          .filter((item) => item.public || user.isAuthenticated)
+          .filter((item) => (item.public || user.isAuthenticated) && (!item.staffOnly || user.isStaff))
           .map((item) => {
             const Icon = item.icon;
             return (
@@ -789,6 +791,8 @@ function PageRenderer({ data }: { data: InitialData }) {
       return <StockReposicioPage {...props} />;
     case "estadistiques":
       return <StatsPage {...props} />;
+    case "agent_runs":
+      return <AgentRunsPage />;
     case "auth_login":
       return <LoginPage {...props} />;
     case "auth_register":
@@ -1946,6 +1950,142 @@ function StatsPage({ payload }: { payload: Record<string, any>; csrfToken: strin
       <Panel title="Albaranes entregados" eyebrow={`${delivered.length} cerrados`} className="span-2">
         {delivered.length ? <AlbaraTable albarans={delivered} compact /> : <EmptyState icon={<Truck size={28} />} title="Sin entregas cerradas" text="Entrega un albaran para alimentar esta tabla." action={<ActionLink href="/albarans/" variant="ghost">Ver albaranes</ActionLink>} />}
       </Panel>
+    </div>
+  );
+}
+
+type AgentRunTrace = {
+  id: number;
+  user: string;
+  conversation_id: number;
+  input: string;
+  answer: string;
+  status: string;
+  intent: string;
+  entity: string;
+  provider: string;
+  model: string;
+  mock: boolean;
+  latency_ms: number;
+  feedback: string;
+  created_at: string;
+  tool_calls?: Array<{ name: string; status: string; arguments: Record<string, unknown>; summary: Record<string, unknown>; latency_ms: number }>;
+};
+
+function AgentRunsPage() {
+  const [runs, setRuns] = useState<AgentRunTrace[]>([]);
+  const [selected, setSelected] = useState<AgentRunTrace | null>(null);
+  const [status, setStatus] = useState("");
+  const [mock, setMock] = useState("");
+  const [query, setQuery] = useState("");
+  const [error, setError] = useState("");
+
+  async function loadRuns() {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (mock) params.set("mock", mock);
+    if (query) params.set("q", query);
+    try {
+      const payload = await agentGet<{ runs: AgentRunTrace[] }>(`/api/agent/runs/?${params.toString()}`);
+      setRuns(payload.runs || []);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron cargar trazas.");
+    }
+  }
+
+  async function openRun(id: number) {
+    try {
+      const payload = await agentGet<{ run: AgentRunTrace }>(`/api/agent/runs/${id}/`);
+      setSelected(payload.run);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo abrir la traza.");
+    }
+  }
+
+  useEffect(() => {
+    loadRuns();
+  }, []);
+
+  return (
+    <div className="agent-runs-layout">
+      <PageHeader
+        eyebrow="Aurora Operator"
+        title="Trazabilidad Agent Runs"
+        description="Panel interno para revisar routing, semantic query, tools read-only, latencia y feedback."
+      />
+      {error && <div className="notice notice-warning"><AlertTriangle size={18} /> {error}</div>}
+      <Panel title="Filtros" eyebrow="Observabilidad">
+        <form className="filter-form trace-filters" onSubmit={(event) => { event.preventDefault(); loadRuns(); }}>
+          <label>
+            Estado
+            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+              <option value="">Todos</option>
+              <option value="ok">OK</option>
+              <option value="blocked">Blocked</option>
+              <option value="error">Error</option>
+            </select>
+          </label>
+          <label>
+            Modo
+            <select value={mock} onChange={(event) => setMock(event.target.value)}>
+              <option value="">Todos</option>
+              <option value="true">Mock</option>
+              <option value="false">Real</option>
+            </select>
+          </label>
+          <label>
+            Buscar
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Texto de entrada" />
+          </label>
+          <button className="btn btn-primary" type="submit"><Filter size={16} /> Filtrar</button>
+        </form>
+      </Panel>
+      <Panel title="Runs recientes" eyebrow={`${runs.length} trazas`} className="span-2">
+        {runs.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Usuario</th><th>Input</th><th>Intent</th><th>Status</th><th>Modo</th><th>Latencia</th><th /></tr></thead>
+              <tbody>
+                {runs.map((run) => (
+                  <tr key={run.id}>
+                    <td>#{run.id}</td>
+                    <td>{run.user}</td>
+                    <td><strong>{run.input}</strong><small className="cell-subtext">{formatDate(run.created_at, true)}</small></td>
+                    <td><Badge tone="neutral">{run.intent || "n/a"}</Badge></td>
+                    <td><Badge tone={run.status === "ok" ? "success" : run.status === "blocked" ? "warning" : "danger"}>{run.status}</Badge></td>
+                    <td>{run.mock ? <Badge tone="warning">Mock</Badge> : <Badge tone="primary">Real</Badge>}</td>
+                    <td>{run.latency_ms} ms</td>
+                    <td><button className="row-action" type="button" onClick={() => openRun(run.id)} aria-label={`Abrir run ${run.id}`}><Eye size={15} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <EmptyState icon={<Database size={28} />} title="Sin trazas" text="Ejecuta una consulta en Aurora Operator para generar runs." />}
+      </Panel>
+      {selected && (
+        <Panel title={`Run #${selected.id}`} eyebrow={`${selected.provider} · ${selected.model || "sin modelo"}`} className="span-2">
+          <div className="trace-detail">
+            <span><strong>Input</strong>{selected.input}</span>
+            <span><strong>Respuesta</strong>{selected.answer}</span>
+            <span><strong>Semantic query</strong>{selected.intent || "n/a"} · {selected.entity || "n/a"}</span>
+            <span><strong>Feedback</strong>{selected.feedback || "sin feedback"}</span>
+          </div>
+          <div className="agent-run-details">
+            {(selected.tool_calls || []).map((call) => (
+              <div className="agent-mini-panel" key={`${selected.id}-${call.name}`}>
+                <strong>{call.name}</strong>
+                <div>
+                  <Badge tone={call.status === "ok" ? "success" : call.status === "empty" ? "neutral" : "warning"}>{call.status}</Badge>
+                  <span>{call.latency_ms} ms</span>
+                  <span>{Object.entries(call.arguments || {}).map(([key, value]) => `${key}: ${String(value)}`).join(" · ") || "sin argumentos"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }
