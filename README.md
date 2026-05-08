@@ -11,9 +11,6 @@ Modern ERP with Django, Aurora UI and a read-only AI operations agent.
 Aurora Ops ERP manages customers, product catalog, delivery notes, preparation queues, warehouse stock and sales analytics. The UI is designed as an operational command center with Night Ops and Day Ops themes plus Command and Operator density modes.
 
 ## Screenshots
-
-Screenshots to be added after final visual pass.
-
 ### Dark Mode dashboard
 ![Aurora Dark Mode dashboard](docs/assets/dark-dashboard.png)
 ### Light Mode dashboard
